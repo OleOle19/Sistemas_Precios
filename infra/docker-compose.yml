@@ -1,0 +1,57 @@
+services:
+  postgres:
+    image: postgres:18
+    container_name: sistemas-precios-postgres
+    environment:
+      POSTGRES_DB: sistemas_precios
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+      - ./postgres-init:/docker-entrypoint-initdb.d
+
+  vision-rs:
+    build:
+      context: ..
+      dockerfile: services/vision-rs/Dockerfile
+    container_name: sistemas-precios-vision
+    ports:
+      - "50051:50051"
+
+  api:
+    build:
+      context: ..
+      dockerfile: services/api/Dockerfile
+    container_name: sistemas-precios-api
+    depends_on:
+      - postgres
+      - vision-rs
+    environment:
+      Database__Provider: Postgres
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=sistemas_precios;Username=postgres;Password=postgres
+      Vision__GrpcUrl: http://vision-rs:50051
+      Storage__RootPath: /app/storage
+      ASPNETCORE_ENVIRONMENT: Development
+    ports:
+      - "8080:8080"
+    volumes:
+      - api_storage:/app/storage
+
+  web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+    container_name: sistemas-precios-web
+    depends_on:
+      - api
+    environment:
+      API_BASE_URL: http://api:8080
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:
+  api_storage:

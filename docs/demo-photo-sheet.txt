@@ -1,0 +1,16 @@
+LISTA DE PRECIOS DEMO
+PROVEEDOR: PRUEBA CAMARA
+FECHA: 08/06/2026
+
+ACEITE VEGETAL 1L S/ 8.90
+ARROZ EXTRA 5KG S/ 22.50
+AZUCAR RUBIA 1KG S/ 4.90
+LECHE EVAPORADA 410G S/ 3.40
+FIDEOS TALLARIN 500G S/ 2.80
+
+Consejos para la foto:
+- Escribelo o imprimelo en mayusculas.
+- Deja una linea por producto.
+- Usa lapicero negro o azul oscuro.
+- Toma la foto de frente, con buena luz y sin sombras.
+- Incluye todo el texto en una sola imagen.

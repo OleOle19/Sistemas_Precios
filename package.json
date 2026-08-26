@@ -1,0 +1,14 @@
+{
+  "name": "sistemas-precios",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/web"
+  ],
+  "scripts": {
+    "dev:web": "npm.cmd --workspace web run dev",
+    "build:web": "npm.cmd --workspace web run build",
+    "lint:web": "npm.cmd --workspace web run lint",
+    "test:web:e2e": "npm.cmd --workspace web run test:e2e"
+  }
+}
