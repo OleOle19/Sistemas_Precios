@@ -24,6 +24,7 @@ public static class LocalSecrets
             catch (CryptographicException) { throw new InvalidOperationException("La configuración cifrada pertenece a otra cuenta de Windows. Ejecuta nuevamente Configurar-Local.ps1."); }
         }
         if (root.TryGetProperty("Email", out var email) && !string.IsNullOrWhiteSpace(email.GetString())) config["Bootstrap:Email"] = email.GetString();
+        if (root.TryGetProperty("WorkspaceName", out var workspace) && !string.IsNullOrWhiteSpace(workspace.GetString()) && string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("Workspace__Name"))) config["Workspace:Name"] = workspace.GetString();
         if (root.TryGetProperty("ExtractionProvider", out var provider) && string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("Extraction__Provider"))) config["Extraction:Provider"] = provider.GetString();
     }
 }

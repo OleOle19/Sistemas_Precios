@@ -1,28 +1,31 @@
 import Link from "next/link";
-import { statusLabel } from "../../lib/display";
-import { DocumentUploadForm } from "../../components/document-upload-form";
+import { statusLabel } from "../../../lib/display";
+import { DocumentUploadForm } from "../../../components/document-upload-form";
 import {
   getDocuments,
   getSuppliers,
   getExtractionSettings,
-} from "../../lib/api";
+  requireSession,
+} from "../../../lib/api";
+import { canEditPrices } from "../../../lib/permissions";
 
 export const dynamic = "force-dynamic";
 
 export default async function DocumentsPage() {
-  const [suppliers, documents, settings] = await Promise.all([
+  const [suppliers, documents, settings, session] = await Promise.all([
     getSuppliers(),
     getDocuments(),
     getExtractionSettings(),
+    requireSession(),
   ]);
 
   return (
     <div className="page-stack">
-      <DocumentUploadForm
+      {canEditPrices(session) && <DocumentUploadForm
         suppliers={suppliers}
         configured={settings.configured}
         provider={settings.provider}
-      />
+      />}
 
       <section className="card">
         <div className="section-heading">

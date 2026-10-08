@@ -15,6 +15,35 @@ public static class ApiRoutes
     public static void MapApiRoutes(this IEndpointRouteBuilder app)
     {
         app.MapPost("/auth/login", LoginAsync);
+        app.MapGet("/auth/me", (HttpContext http,IConfiguration config) => Results.Ok(new SessionResponse(
+            Guid.Parse(http.User.FindFirstValue(ClaimTypes.NameIdentifier)!),
+            http.User.FindFirstValue(ClaimTypes.Name)!,http.User.FindFirstValue(ClaimTypes.Email)!,http.User.FindFirstValue(ClaimTypes.Role)!,
+            config["Workspace:Name"] ?? "Mi negocio"))).RequireAuthorization();
+        app.MapGet("/team/users", async (ApplicationDbContext db,CancellationToken ct) => Results.Ok(
+            await db.Users.AsNoTracking().OrderBy(u=>u.FullName).Select(u=>new TeamUserResponse(u.Id,u.FullName,u.Email,u.Role.ToString())).ToListAsync(ct))).RequireAuthorization("ManageTeam");
+        app.MapPost("/team/users", async (CreateTeamUserRequest request,TeamService team,CancellationToken ct) =>
+        {
+            try { var user=await team.CreateAsync(request,ct); return Results.Created($"/team/users/{user.Id}",user); }
+            catch(ArgumentException ex) { return Results.BadRequest(new {message=ex.Message}); }
+            catch(DbUpdateException) { return Results.Conflict(new {message="Ese correo ya está registrado. Recarga el equipo."}); }
+        }).RequireAuthorization("ManageTeam");
+        app.MapPost("/team/users/{id:guid}/role", async (Guid id,UpdateTeamRoleRequest request,HttpContext http,TeamService team,CancellationToken ct) =>
+        {
+            try { return Results.Ok(await team.ChangeRoleAsync(Guid.Parse(http.User.FindFirstValue(ClaimTypes.NameIdentifier)!),id,request.Role,ct)); }
+            catch(ArgumentException ex) { return Results.BadRequest(new {message=ex.Message}); }
+            catch(UnauthorizedAccessException) { return Results.Forbid(); }
+            catch(DbUpdateException) { return Results.Conflict(new {message="El equipo cambió. Recarga y vuelve a intentar."}); }
+        }).RequireAuthorization("ManageTeam");
+        app.MapPost("/auth/password", async (ChangePasswordRequest request,HttpContext http,TeamService team,CancellationToken ct) =>
+        {
+            try
+            {
+                await team.ChangePasswordAsync(Guid.Parse(http.User.FindFirstValue(ClaimTypes.NameIdentifier)!),request,ct);
+                await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                return Results.NoContent();
+            }
+            catch(ArgumentException ex) { return Results.BadRequest(new {message=ex.Message}); }
+        }).RequireAuthorization();
         app.MapPost("/auth/logout", async (HttpContext httpContext) =>
         {
             await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
@@ -22,7 +51,7 @@ public static class ApiRoutes
         }).RequireAuthorization();
 
         app.MapGet("/suppliers", GetSuppliersAsync).RequireAuthorization();
-        app.MapPost("/suppliers", CreateSupplierAsync).RequireAuthorization();
+        app.MapPost("/suppliers", CreateSupplierAsync).RequireAuthorization("EditPrices");
 
         app.MapGet("/documents", GetDocumentsAsync).RequireAuthorization();
         app.MapGet("/documents/{id:guid}", GetDocumentAsync).RequireAuthorization();
@@ -41,9 +70,9 @@ public static class ApiRoutes
                 model = PriceExtractionSettings.Model(config, provider)
             });
         }).RequireAuthorization();
-        app.MapPost("/documents", UploadDocumentAsync).RequireAuthorization();
-        app.MapPost("/documents/{id:guid}/reprocess", ReprocessDocumentAsync).RequireAuthorization();
-        app.MapPost("/documents/{id:guid}/review", ReviewDocumentAsync).RequireAuthorization();
+        app.MapPost("/documents", UploadDocumentAsync).RequireAuthorization("EditPrices");
+        app.MapPost("/documents/{id:guid}/reprocess", ReprocessDocumentAsync).RequireAuthorization("EditPrices");
+        app.MapPost("/documents/{id:guid}/review", ReviewDocumentAsync).RequireAuthorization("EditPrices");
 
         app.MapGet("/comparisons/current", GetCurrentComparisonsAsync).RequireAuthorization();
         app.MapGet("/comparisons/history", GetHistoryAsync).RequireAuthorization();
@@ -61,25 +90,14 @@ public static class ApiRoutes
         if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password) || request.Email.Length > 250 || request.Password.Length > 500)
             return Results.Unauthorized();
         var user = await db.Users.FirstOrDefaultAsync(item => item.Email == request.Email.Trim().ToLower(), cancellationToken);
-        if (user is null || !passwordService.VerifyPassword(request.Password, user.PasswordHash))
+        if (user is null || !UserSessions.Enabled(user) || !passwordService.VerifyPassword(request.Password, user.PasswordHash))
         {
             return Results.Unauthorized();
         }
 
-        var claims = new List<Claim>
-        {
-            new(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new(ClaimTypes.Name, user.FullName),
-            new(ClaimTypes.Email, user.Email),
-            new(ClaimTypes.Role, user.Role.ToString())
-        };
-
-        var principal = new ClaimsPrincipal(
-            new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme));
-
         await httpContext.SignInAsync(
             CookieAuthenticationDefaults.AuthenticationScheme,
-            principal);
+            UserSessions.Principal(user));
 
         return Results.Ok(new LoggedInUserResponse(user.Id, user.FullName, user.Email, user.Role.ToString()));
     }

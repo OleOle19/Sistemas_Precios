@@ -1,10 +1,11 @@
-import { SupplierForm } from "../../components/supplier-form";
-import { getSuppliers } from "../../lib/api";
+import { SupplierForm } from "../../../components/supplier-form";
+import { getSuppliers, requireSession } from "../../../lib/api";
+import { canEditPrices } from "../../../lib/permissions";
 
 export const dynamic = "force-dynamic";
 
 export default async function SuppliersPage() {
-  const suppliers = await getSuppliers();
+  const [suppliers, session] = await Promise.all([getSuppliers(), requireSession()]);
 
   return (
     <div className="page-stack">
@@ -14,7 +15,7 @@ export default async function SuppliersPage() {
           <h2>Proveedores</h2>
         </div>
       </section>
-      <SupplierForm />
+      {canEditPrices(session) && <SupplierForm />}
       <div className="grid cards-grid">
         {suppliers.map((supplier) => (
           <article key={supplier.id} className="card">

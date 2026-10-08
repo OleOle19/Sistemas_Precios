@@ -1,7 +1,7 @@
 # Sistema de precios comparativos mediante fotos e IA
 Aplicación para convertir fotos de etiquetas y cotizaciones de proveedores en precios revisados y comparables. Nació como propuesta de un familiar que trabaja en sistemas: **“Sistemas de precios comparativos mediante fotos usando IA”**.
 ## Qué permite hacer
-1. Iniciar sesión con una cuenta local y registrar proveedores o tiendas.
+1. Iniciar sesión en el negocio con una cuenta propia y registrar proveedores o tiendas según el rol asignado.
 2. Subir JPG, PNG, WebP o PDF de hasta 10 MB, indicar tipo de fuente y fecha del precio.
 3. Leer el archivo con Gemini u OpenAI y obtener producto, contenido, unidad, precio y moneda. Los datos ilegibles quedan vacíos; los fallos no generan precios de ejemplo.
 4. Contrastar el resultado con el original, corregir cada fila y descartar totales o filas ajenas. Todas las extracciones requieren aprobación humana.
@@ -44,7 +44,17 @@ dotnet test SistemasPrecios.sln
 ```
 Cada prueba crea una base temporal `PreciosTests_<GUID>` y elimina exclusivamente esa base al finalizar. Las pruebas del navegador usan una base SQLite nueva y **deshabilitan las claves de Gemini y OpenAI**, por lo que no consumen saldo. Los contratos de Gemini y OpenAI se prueban con transporte controlado; validar reconocimiento real requiere ejecutar la lectura con una clave vigente y fotos representativas.
 ## Alcance actual
-Versión funcional para ejecución local o una instalación con una única instancia de API. No incluye despliegue público, gestión de múltiples organizaciones, conversión de monedas, integración con sistemas de compras ni verificación automática de impuestos. Una cuenta administradora se crea al iniciar una base nueva; el formulario de configuración no cambia contraseñas de cuentas existentes.
+Versión funcional para **un negocio por instalación, con varias cuentas** y una única instancia de API. El administrador agrega integrantes desde **Equipo**: pueden usar correos de cualquier dominio, y todos comparten proveedores, documentos, precios e historial de esa instalación. No se agrupan cuentas por dominio del correo ni hay registro público. Una persona que trabaja sola usa su cuenta administradora; otro negocio necesita una instalación y base separadas.
+
+| Rol | Permisos |
+| --- | --- |
+| Administrador | Consultar, registrar proveedores, subir y revisar documentos, crear cuentas y cambiar o deshabilitar el acceso de otros integrantes. |
+| Analista | Consultar, registrar proveedores, subir, corregir y aprobar documentos. |
+| Consulta | Ver proveedores, archivos, comparaciones e historial. |
+
+Cada cuenta puede cambiar su contraseña desde **Mi cuenta**, verificando la actual; esto cierra todas sus sesiones previas. Deshabilitar una cuenta impide su acceso y elimina el uso de sus sesiones abiertas. Los cambios de rol se aplican a las solicitudes siguientes. El administrador no puede quitarse su propio acceso desde Equipo. Las páginas privadas redirigen al ingreso sin sesión, y la API verifica sesión y permisos incluso ante solicitudes directas.
+
+No incluye despliegue público, gestión de múltiples organizaciones en una aplicación, recuperación de contraseña por correo, conversión de monedas, integración con sistemas de compras ni verificación automática de impuestos. Una cuenta administradora se crea al iniciar una base nueva; el formulario de configuración no cambia contraseñas de cuentas existentes.
 El esquema v2 se crea en una base nueva mediante `EnsureCreated`; no se migra automáticamente una base del prototipo. SQLite usa `storage/precios-v2.db` para conservar el archivo anterior. Antes de futuras actualizaciones de esquema o uso con datos empresariales, se necesita una estrategia de migraciones versionadas y copias de seguridad. [Arquitectura y decisiones](docs/architecture.md).
 
 ## Materiales de demostración

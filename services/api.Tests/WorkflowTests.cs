@@ -138,6 +138,32 @@ public sealed class WorkflowTests : IAsyncLifetime
     }
     private sealed class FailingExtractor : IPriceExtractor { public Task<IReadOnlyList<StructuredExtractionLine>> ExtractAsync(string p, string m, string k, CancellationToken ct) => throw new ExtractionException("Fallo controlado"); }
     [Fact]
+    public async Task TeamCannotDisableOwnAdminAndDisabledActorCannotManageOthers()
+    {
+        var passwords = new PasswordService(); var team = new TeamService(db, passwords);
+        var first = await team.CreateAsync(new("Primer admin", "first@example.org", "TestPassword2026!", "Admin"), default);
+        var second = await team.CreateAsync(new("Otro admin", "second@example.net", "TestPassword2026!", "Admin"), default);
+        await Assert.ThrowsAsync<ArgumentException>(() => team.ChangeRoleAsync(first.Id, first.Id, "Disabled", default));
+        await team.ChangeRoleAsync(first.Id, second.Id, "Disabled", default);
+        db.ChangeTracker.Clear();
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => team.ChangeRoleAsync(second.Id, first.Id, "Disabled", default));
+        Assert.Equal(UserRole.Admin, (await db.Users.SingleAsync(u => u.Id == first.Id)).Role);
+    }
+    [Fact]
+    public async Task PasswordChangeChecksCurrentCredentialAndKeepsOtherAccountsUnchanged()
+    {
+        var passwords = new PasswordService(); var team = new TeamService(db, passwords);
+        var first = await team.CreateAsync(new("Ana", "ana@example.org", "TestPassword2026!", "Analyst"), default);
+        var second = await team.CreateAsync(new("Luis", "luis@example.net", "TestPassword2026!", "Viewer"), default);
+        await Assert.ThrowsAsync<ArgumentException>(() => team.ChangePasswordAsync(first.Id, new("incorrect", "NewPassword2026!"), default));
+        await team.ChangePasswordAsync(first.Id, new("TestPassword2026!", "NewPassword2026!"), default);
+        db.ChangeTracker.Clear();
+        var a = await db.Users.SingleAsync(u => u.Id == first.Id); var b = await db.Users.SingleAsync(u => u.Id == second.Id);
+        Assert.True(passwords.VerifyPassword("NewPassword2026!", a.PasswordHash));
+        Assert.False(passwords.VerifyPassword("TestPassword2026!", a.PasswordHash));
+        Assert.True(passwords.VerifyPassword("TestPassword2026!", b.PasswordHash));
+    }
+    [Fact]
     public async Task DashboardKeepsActualPreviousPriceInsteadOfReconstructingRoundedVariation()
     {
         var first = await Pending();

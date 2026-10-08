@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { LogoutButton } from "./logout-button";
 import type { ReactNode } from "react";
+import { roleLabel, type Session } from "../lib/permissions";
 
 const navigation = [
   { href: "/", label: "Resumen" },
@@ -8,16 +9,17 @@ const navigation = [
   { href: "/documents", label: "Documentos" },
   { href: "/comparisons", label: "Comparaciones" },
   { href: "/history", label: "Historial" },
-  { href: "/login", label: "Ingresar" },
+  { href: "/account", label: "Mi cuenta" },
 ] as const;
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({ children, session }: { children: ReactNode; session: Session }) {
   return (
     <div className="app-shell">
       <aside className="sidebar">
         <div>
           <p className="eyebrow">Compras informadas</p>
           <h1>Sistema de Precios</h1>
+          <strong>{session.workspaceName}</strong>
           <p className="muted">
             Compara precios verificados de proveedores y tiendas.
           </p>
@@ -28,10 +30,12 @@ export function AppShell({ children }: { children: ReactNode }) {
               {item.label}
             </Link>
           ))}
+          {session.role === "Admin" && <Link href="/team" className="nav-link">Equipo</Link>}
         </nav>
         <div className="sidebar-card">
-          <strong>Verifica antes de decidir</strong>
-          <span>Los precios aprobados conservan el documento original.</span>
+          <strong>{session.fullName}</strong>
+          <span>{session.email}</span>
+          <span>{roleLabel(session.role)}</span>
           <LogoutButton />
         </div>
       </aside>

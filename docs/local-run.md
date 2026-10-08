@@ -2,12 +2,17 @@
 ## Windows: configuración con campos ocultos
 1. Ejecuta `npm ci` en la raíz.
 2. Ejecuta `powershell -NoProfile -STA -ExecutionPolicy Bypass -File scripts/Configurar-Local.ps1`.
-3. En una configuración nueva, elige correo y contraseña de al menos 12 caracteres. Selecciona Gemini (predeterminado) u OpenAI e ingresa la clave del servicio elegido, o déjala vacía para configurarla después. Nunca la pegues en el chat, un README o un archivo versionado. Revoca cualquier clave expuesta en el panel de su proveedor.
+3. Escribe el nombre del negocio. En una configuración nueva, elige correo y contraseña de al menos 12 caracteres. Selecciona Gemini (predeterminado) u OpenAI e ingresa la clave del servicio elegido, o déjala vacía para configurarla después. Nunca la pegues en el chat, un README o un archivo versionado. Revoca cualquier clave expuesta en el panel de su proveedor.
 4. Ejecuta `dotnet run --project services/api`.
 5. En otra terminal ejecuta `npm run dev:web`.
 6. Abre http://localhost:3000.
 El formulario cifra valores con DPAPI para la cuenta actual de Windows. El archivo `services/api/storage/local-secrets.json` está ignorado por Git. Reinicia la API cuando cambies la clave. Si vuelves a configurar, una clave vacía conserva la clave anterior del servicio seleccionado. Una contraseña vacía conserva la configuración previa; la contraseña solo se usa para crear la cuenta en una base nueva. Guarda tu contraseña: el formulario no restablece una cuenta existente.
 La API resuelve almacenamiento y SQLite respecto de `services/api`, independientemente de la carpeta desde la cual la ejecutes.
+
+## Integrantes y permisos
+El administrador entra en **Equipo** para crear cuentas con nombre, correo, contraseña inicial y rol. Las cuentas de la misma instalación comparten el negocio aunque sus correos tengan dominios diferentes. Analista puede cargar y aprobar documentos; Consulta solo lee. El administrador puede modificar o deshabilitar el acceso de otros integrantes, pero no el suyo. Las personas cambian su contraseña en **Mi cuenta**, conociendo la actual; se cierran sus sesiones anteriores. No hay recuperación por correo en esta versión.
+
+El nombre del negocio se puede cambiar en el formulario y aplicar al reiniciar, o mediante `Workspace__Name`. No crea otro negocio ni otra base. Para negocios diferentes se requieren instalaciones y bases separadas.
 ## Configuración por variables
 En otros sistemas, configura `Extraction__Provider=Gemini` y `GEMINI_API_KEY`, o `Extraction__Provider=OpenAI` y `OPENAI_API_KEY` (solo en el servidor), además de `Bootstrap__Email` y `Bootstrap__Password`. Los modelos se configuran con `Gemini__Model` u `OpenAI__Model`. También se admiten secretos de usuario de .NET en desarrollo. No incluyas secretos en comandos que queden en el historial de una terminal compartida. Usa el administrador de secretos del entorno.
 Gemini usa `gemini-3.1-flash-lite` por defecto; OpenAI usa `gpt-5.4-mini`. Se envían los bytes reales del archivo al proveedor seleccionado con un esquema JSON común y revisión humana obligatoria. OpenAI usa Responses con `store=false`, lo cual no elimina todas sus posibles políticas de retención. Cada lectura utiliza cuota o saldo según el proyecto; el sistema no cambia de proveedor automáticamente. La aplicación no sustituye una clave por datos de prueba.

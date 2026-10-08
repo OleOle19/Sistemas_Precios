@@ -3,6 +3,11 @@ namespace SistemasPrecios.Api.Dtos;
 public sealed record LoginRequest(string Email, string Password);
 
 public sealed record LoggedInUserResponse(Guid Id, string FullName, string Email, string Role);
+public sealed record SessionResponse(Guid Id, string FullName, string Email, string Role, string WorkspaceName);
+public sealed record TeamUserResponse(Guid Id, string FullName, string Email, string Role);
+public sealed record CreateTeamUserRequest(string FullName, string Email, string Password, string Role);
+public sealed record UpdateTeamRoleRequest(string Role);
+public sealed record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 
 public sealed record SupplierCreateRequest(string Name, string? ContactEmail);
 

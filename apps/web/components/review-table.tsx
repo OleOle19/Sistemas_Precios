@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import type { DocumentDetail } from "../lib/types";
 import { submit } from "../lib/submit";
 import { statusLabel } from "../lib/display";
-export function ReviewTable({ document }: { document: DocumentDetail }) {
+export function ReviewTable({ document, canWrite }: { document: DocumentDetail; canWrite: boolean }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -37,7 +37,7 @@ export function ReviewTable({ document }: { document: DocumentDetail }) {
       })),
     );
   }, [document.id, document.lines]);
-  const editable = document.status === "NeedsReview";
+  const editable = canWrite && document.status === "NeedsReview";
   function change(index: number, key: string, value: string | boolean) {
     setRows((old) =>
       old.map((r, i) => (i === index ? { ...r, [key]: value } : r)),
@@ -103,7 +103,7 @@ export function ReviewTable({ document }: { document: DocumentDetail }) {
           Leyendo el archivo. Esta página se actualizará automáticamente.
         </p>
       )}
-      {document.status === "Failed" && (
+      {canWrite && document.status === "Failed" && (
         <button disabled={busy} className="primary-button" onClick={retry}>
           Volver a leer (usa cuota de API)
         </button>
@@ -232,7 +232,7 @@ export function ReviewTable({ document }: { document: DocumentDetail }) {
                 {busy ? "Guardando…" : "Aprobar precios"}
               </button>
               <button type="button" disabled={busy} onClick={retry}>
-                Volver a leer (consume saldo de API)
+                Volver a leer (usa cuota de API)
               </button>
             </>
           )}

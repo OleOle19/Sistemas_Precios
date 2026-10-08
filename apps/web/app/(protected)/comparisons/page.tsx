@@ -1,5 +1,5 @@
-import { money } from "../../lib/display";
-import { getCurrentComparisons } from "../../lib/api";
+import { money } from "../../../lib/display";
+import { getCurrentComparisons } from "../../../lib/api";
 
 export const dynamic = "force-dynamic";
 

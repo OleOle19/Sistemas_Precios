@@ -2,8 +2,10 @@ namespace SistemasPrecios.Api.Domain;
 
 public enum UserRole
 {
+    Disabled = 0,
     Admin = 1,
-    Analyst = 2
+    Analyst = 2,
+    Viewer = 3
 }
 
 public enum DocumentStatus

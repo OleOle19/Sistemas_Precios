@@ -51,6 +51,9 @@ builder.Services
         options.Cookie.SameSite = SameSiteMode.Lax;
         options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
         options.LoginPath = "/auth/login";
+        options.ExpireTimeSpan = TimeSpan.FromHours(8);
+        options.SlidingExpiration = false;
+        options.Events.OnValidatePrincipal = UserSessions.ValidateAsync;
         options.Events.OnRedirectToLogin = context =>
         {
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
@@ -63,7 +66,12 @@ builder.Services
         };
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("ManageTeam", policy => policy.RequireRole("Admin"));
+    options.AddPolicy("EditPrices", policy => policy.RequireRole("Admin", "Analyst"));
+});
+builder.Services.AddScoped<TeamService>();
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
@@ -102,6 +110,7 @@ app.UseExceptionHandler();
 app.UseCors("web");
 app.Use(async (context, next) =>
 {
+    context.Response.Headers.CacheControl = "no-store";
     if (HttpMethods.IsPost(context.Request.Method) && context.Request.Headers.TryGetValue("Origin", out var origin))
     {
         var allowed = builder.Configuration.GetSection("Web:Origins").Get<string[]>() ?? ["http://localhost:3000", "http://127.0.0.1:3000"];

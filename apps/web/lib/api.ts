@@ -1,5 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect, notFound } from "next/navigation";
+import { cache } from "react";
+import type { Session } from "./permissions";
 import type {
   ComparisonHistoryItem,
   CurrentComparison,
@@ -9,6 +11,8 @@ import type {
   Supplier,
 } from "./types";
 const base = process.env.API_BASE_URL ?? "http://localhost:8080";
+export const requireSession = cache(() => requestJson<Session>("/auth/me"));
+export const getTeamUsers = () => requestJson<{ id: string; fullName: string; email: string; role: string }[]>("/team/users");
 async function requestJson<T>(path: string): Promise<T> {
   let response: Response;
   try {

@@ -12,7 +12,7 @@ if (Test-Path -LiteralPath $secretPath) {
 }
 $form = New-Object System.Windows.Forms.Form
 $form.Text = 'Configurar Sistema de Precios - Gemini / OpenAI'
-$form.Size = New-Object System.Drawing.Size(580,540)
+$form.Size = New-Object System.Drawing.Size(580,610)
 $form.StartPosition = 'CenterScreen'
 $form.FormBorderStyle = 'FixedDialog'
 $form.MaximizeBox = $false
@@ -27,31 +27,37 @@ function Add-Field([string]$title, [int]$y, [bool]$hidden) {
     $inputBox.UseSystemPasswordChar = $hidden; $form.Controls.Add($inputBox)
     return $inputBox
 }
-$email = Add-Field 'Correo de tu cuenta local' 18 $false
+$workspace = Add-Field 'Nombre del negocio' 18 $false
+$workspace.Text = 'Mi negocio'
+if ($previous.WorkspaceName) { $workspace.Text = $previous.WorkspaceName }
+$email = Add-Field 'Correo de tu cuenta local' 88 $false
 $email.Text = 'admin@precios.local'
 if ($previous.Email) { $email.Text = $previous.Email; $email.ReadOnly = $true }
-$password = Add-Field 'Contraseña (vacío conserva la anterior; no la restablece)' 88 $true
+$password = Add-Field 'Contraseña (vacío conserva la anterior; no la restablece)' 158 $true
 if ($previous.Password) { $password.Enabled = $false }
 $providerLabel = New-Object System.Windows.Forms.Label
-$providerLabel.Text = 'Servicio para leer fotos y PDF'; $providerLabel.Location = New-Object System.Drawing.Point(24,162); $providerLabel.Size = New-Object System.Drawing.Size(515,24)
+$providerLabel.Text = 'Servicio para leer fotos y PDF'; $providerLabel.Location = New-Object System.Drawing.Point(24,232); $providerLabel.Size = New-Object System.Drawing.Size(515,24)
 $form.Controls.Add($providerLabel)
 $provider = New-Object System.Windows.Forms.ComboBox
-$provider.DropDownStyle = 'DropDownList'; $provider.Location = New-Object System.Drawing.Point(24,189); $provider.Size = New-Object System.Drawing.Size(515,28)
+$provider.DropDownStyle = 'DropDownList'; $provider.Location = New-Object System.Drawing.Point(24,259); $provider.Size = New-Object System.Drawing.Size(515,28)
 [void]$provider.Items.Add('Gemini'); [void]$provider.Items.Add('OpenAI')
 $provider.SelectedIndex = 0
 if ($previous.ExtractionProvider -eq 'OpenAI') { $provider.SelectedIndex = 1 }
 $form.Controls.Add($provider)
-$key = Add-Field 'Clave del servicio elegido (vacío conserva su clave anterior)' 232 $true
+$key = Add-Field 'Clave del servicio elegido (vacío conserva su clave anterior)' 302 $true
 $note = New-Object System.Windows.Forms.Label
 $note.Text = 'Gemini: crea una clave en Google AI Studio, en un proyecto gratuito. Usa documentos ficticios: Google puede usar su contenido para mejorar productos. Las claves se cifran en este equipo y no se suben a GitHub.'
-$note.Location = New-Object System.Drawing.Point(24,310); $note.Size = New-Object System.Drawing.Size(515,80)
+$note.Location = New-Object System.Drawing.Point(24,380); $note.Size = New-Object System.Drawing.Size(515,80)
 $form.Controls.Add($note)
 $provider.Add_SelectedIndexChanged({ $key.Clear() })
 $save = New-Object System.Windows.Forms.Button
-$save.Text = 'Guardar configuración'; $save.Location = New-Object System.Drawing.Point(294,422); $save.Size = New-Object System.Drawing.Size(245,40)
+$save.Text = 'Guardar configuración'; $save.Location = New-Object System.Drawing.Point(294,492); $save.Size = New-Object System.Drawing.Size(245,40)
 $form.Controls.Add($save)
 $save.Add_Click({
     try {
+        if (-not $workspace.Text.Trim() -or $workspace.Text.Trim().Length -gt 100) {
+            [System.Windows.Forms.MessageBox]::Show('Escribe un nombre de negocio de hasta 100 caracteres.') | Out-Null; return
+        }
         if ($email.Text -notmatch '^[^\s@]+@[^\s@]+\.[^\s@]+$' -or ($password.Text -and $password.Text.Length -lt 12) -or (-not $password.Text -and -not $previous.Password)) {
             [System.Windows.Forms.MessageBox]::Show('Escribe un correo válido y, en una configuración nueva, una contraseña de al menos 12 caracteres.') | Out-Null; return
         }
@@ -69,6 +75,7 @@ $save.Add_Click({
         if ($keyValue) { $previous[$keyField] = Protect-Value $keyValue }
         if (-not $previous.Password -and $password.Text) { $previous.Password = Protect-Value $password.Text }
         $previous.Email = $email.Text.Trim().ToLower()
+        $previous.WorkspaceName = $workspace.Text.Trim()
         $previous.ExtractionProvider = $selected
         New-Item -ItemType Directory -Force -Path (Split-Path -Parent $secretPath) | Out-Null
         $previous | ConvertTo-Json | Set-Content -LiteralPath $secretPath -Encoding UTF8

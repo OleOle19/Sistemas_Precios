@@ -1,6 +1,6 @@
-import { money } from "../lib/display";
-import { SummaryCards } from "../components/summary-cards";
-import { getDashboardSummary } from "../lib/api";
+import { money } from "../../lib/display";
+import { SummaryCards } from "../../components/summary-cards";
+import { getDashboardSummary } from "../../lib/api";
 
 export const dynamic = "force-dynamic";
 
