@@ -1,57 +1,49 @@
 services:
   postgres:
     image: postgres:18
-    container_name: sistemas-precios-postgres
     environment:
-      POSTGRES_DB: sistemas_precios
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5432:5432"
+      POSTGRES_DB: sistemas_precios_v2
+      POSTGRES_USER: precios
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Configura POSTGRES_PASSWORD}
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U precios -d sistemas_precios_v2']
+      interval: 5s
+      timeout: 5s
+      retries: 15
     volumes:
-      - postgres_data:/var/lib/postgresql
-      - ./postgres-init:/docker-entrypoint-initdb.d
-
-  vision-rs:
-    build:
-      context: ..
-      dockerfile: services/vision-rs/Dockerfile
-    container_name: sistemas-precios-vision
-    ports:
-      - "50051:50051"
-
+      - postgres_v2_data:/var/lib/postgresql
   api:
     build:
       context: ..
       dockerfile: services/api/Dockerfile
-    container_name: sistemas-precios-api
     depends_on:
-      - postgres
-      - vision-rs
+      postgres:
+        condition: service_healthy
     environment:
       Database__Provider: Postgres
-      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=sistemas_precios;Username=postgres;Password=postgres
-      Vision__GrpcUrl: http://vision-rs:50051
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=sistemas_precios_v2;Username=precios;Password=${POSTGRES_PASSWORD:?Configura POSTGRES_PASSWORD}
+      Extraction__Provider: ${EXTRACTION_PROVIDER:-Gemini}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      Bootstrap__Email: ${BOOTSTRAP_EMAIL:-admin@precios.local}
+      Bootstrap__Password: ${BOOTSTRAP_PASSWORD:?Configura BOOTSTRAP_PASSWORD}
       Storage__RootPath: /app/storage
-      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_ENVIRONMENT: Production
+      Web__Origins__0: http://localhost:3000
     ports:
-      - "8080:8080"
+      - 127.0.0.1:8080:8080
     volumes:
-      - api_storage:/app/storage
-
+      - api_v2_storage:/app/storage
   web:
     build:
       context: ..
       dockerfile: apps/web/Dockerfile
-    container_name: sistemas-precios-web
     depends_on:
       - api
     environment:
       API_BASE_URL: http://api:8080
-      NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
     ports:
-      - "3000:3000"
-
+      - 127.0.0.1:3000:3000
 volumes:
-  postgres_data:
-  api_storage:
+  postgres_v2_data:
+  api_v2_storage:

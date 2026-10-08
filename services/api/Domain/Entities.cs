@@ -2,8 +2,10 @@ namespace SistemasPrecios.Api.Domain;
 
 public enum UserRole
 {
+    Disabled = 0,
     Admin = 1,
-    Analyst = 2
+    Analyst = 2,
+    Viewer = 3
 }
 
 public enum DocumentStatus
@@ -64,6 +66,9 @@ public sealed class Document
     public string? FailureReason { get; set; }
     public DateTime UploadedAt { get; set; } = DateTime.UtcNow;
     public DateTime? ReviewedAt { get; set; }
+    public Guid Revision { get; set; } = Guid.NewGuid();
+    public string SourceKind { get; set; } = "quotation";
+    public DateTime ObservedAt { get; set; } = DateTime.UtcNow;
     public List<ExtractedLine> ExtractedLines { get; set; } = [];
     public List<ProcessingJob> Jobs { get; set; } = [];
 }
@@ -91,6 +96,9 @@ public sealed class ExtractedLine
     public string? SuggestedUnit { get; set; }
     public decimal? SuggestedQuantity { get; set; }
     public decimal? SuggestedPrice { get; set; }
+    public string? SuggestedCurrency { get; set; }
+    public string? ApprovedCurrency { get; set; }
+    public bool Excluded { get; set; }
     public decimal ConfidenceScore { get; set; }
     public bool NeedsReview { get; set; }
     public Guid? ApprovedCanonicalProductId { get; set; }
@@ -141,6 +149,8 @@ public sealed class PriceSnapshot
     public Guid DocumentId { get; set; }
     public Document Document { get; set; } = null!;
     public decimal Price { get; set; }
+    public string Currency { get; set; } = "PEN";
+    public DateTime RecordedAt { get; set; } = DateTime.UtcNow;
     public decimal Quantity { get; set; }
     public string Unit { get; set; } = "UN";
     public DateTime EffectiveAt { get; set; } = DateTime.UtcNow;

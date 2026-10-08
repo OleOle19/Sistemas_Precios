@@ -1,89 +1,244 @@
 "use client";
-
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { DocumentDetail } from "../lib/types";
-
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
-
-export function ReviewTable({ document }: { document: DocumentDetail }) {
-  const [message, setMessage] = useState("Corrige y aprueba las lineas con baja confianza.");
-  const suggestedPayload = useMemo(
-    () =>
-      document.lines.map((line) => ({
-        extractedLineId: line.id,
-        canonicalName: line.approvedCanonicalProductName ?? line.suggestedName ?? line.rawText,
-        unit: line.approvedUnit ?? line.suggestedUnit ?? "UN",
-        quantity: line.approvedQuantity ?? line.suggestedQuantity ?? 1,
-        price: line.approvedPrice ?? line.suggestedPrice ?? 0
-      })),
-    [document.lines]
+import { submit } from "../lib/submit";
+import { statusLabel } from "../lib/display";
+export function ReviewTable({ document, canWrite }: { document: DocumentDetail; canWrite: boolean }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const [rows, setRows] = useState(() =>
+    document.lines.map((l) => ({
+      extractedLineId: l.id,
+      canonicalName: l.approvedCanonicalProductName ?? l.suggestedName ?? "",
+      unit: l.approvedUnit ?? l.suggestedUnit ?? "",
+      quantity: String(l.approvedQuantity ?? l.suggestedQuantity ?? ""),
+      price: String(l.approvedPrice ?? l.suggestedPrice ?? ""),
+      currency: l.approvedCurrency ?? l.suggestedCurrency ?? "",
+      excluded: l.excluded,
+    })),
   );
-
-  async function approveDocument() {
+  useEffect(() => {
+    if (!["Uploaded", "Processing"].includes(document.status)) return;
+    const timer = setInterval(() => router.refresh(), 2500);
+    return () => clearInterval(timer);
+  }, [document.status, router]);
+  useEffect(() => {
+    setRows(
+      document.lines.map((l) => ({
+        extractedLineId: l.id,
+        canonicalName: l.approvedCanonicalProductName ?? l.suggestedName ?? "",
+        unit: l.approvedUnit ?? l.suggestedUnit ?? "",
+        quantity: String(l.approvedQuantity ?? l.suggestedQuantity ?? ""),
+        price: String(l.approvedPrice ?? l.suggestedPrice ?? ""),
+        currency: l.approvedCurrency ?? l.suggestedCurrency ?? "",
+        excluded: l.excluded,
+      })),
+    );
+  }, [document.id, document.lines]);
+  const editable = canWrite && document.status === "NeedsReview";
+  function change(index: number, key: string, value: string | boolean) {
+    setRows((old) =>
+      old.map((r, i) => (i === index ? { ...r, [key]: value } : r)),
+    );
+  }
+  async function approve(data: FormData) {
+    if (data.get("confirmed") !== "on") return;
+    setBusy(true);
+    setMessage("");
     try {
-      const response = await fetch(`${apiBaseUrl}/documents/${document.id}/review`, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ lines: suggestedPayload })
+      await submit(`/documents/${document.id}/review`, {
+        lines: rows.map((r) => ({
+          ...r,
+          quantity: Number(r.quantity),
+          price: Number(r.price),
+        })),
       });
-
-      if (!response.ok) {
-        throw new Error("review failed");
-      }
-
-      setMessage("Documento aprobado y snapshots recalculados.");
-    } catch {
-      setMessage(
-        "Modo demo: la tabla y el payload de revision ya estan listos, pero la API no estaba disponible."
-      );
+      setMessage("Precios aprobados. Ya están disponibles para comparar.");
+      router.refresh();
+    } catch (e) {
+      setMessage((e as Error).message);
+    } finally {
+      setBusy(false);
     }
   }
-
+  async function retry() {
+    setBusy(true);
+    try {
+      await submit(`/documents/${document.id}/reprocess`);
+      setMessage("Archivo enviado nuevamente para lectura.");
+      router.refresh();
+    } catch (e) {
+      setMessage((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
   return (
     <div className="card">
-      <div className="section-heading">
-        <div>
-          <p className="eyebrow">Revision humana</p>
-          <h2>{document.fileName}</h2>
-        </div>
-        <button type="button" className="primary-button" onClick={approveDocument}>
-          Aprobar documento
+      <h2>{document.fileName}</h2>
+      <p>
+        {document.supplierName} · {statusLabel(document.status)} · Precio
+        observado: {document.observedAt.slice(0, 10)}
+      </p>
+      <a
+        className="file-link"
+        href={`/api/documents/${document.id}/file`}
+        target="_blank"
+        rel="noreferrer"
+      >
+        Abrir archivo original para verificar
+      </a>
+      {document.contentType.startsWith("image/") && (
+        <img
+          className="document-preview"
+          src={`/api/documents/${document.id}/file`}
+          alt="Archivo original con precios"
+        />
+      )}
+      {document.failureReason && <p role="alert">{document.failureReason}</p>}
+      {["Uploaded", "Processing"].includes(document.status) && (
+        <p role="status">
+          Leyendo el archivo. Esta página se actualizará automáticamente.
+        </p>
+      )}
+      {canWrite && document.status === "Failed" && (
+        <button disabled={busy} className="primary-button" onClick={retry}>
+          Volver a leer (usa cuota de API)
         </button>
-      </div>
-      <div className="table-wrapper">
-        <table>
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Texto OCR</th>
-              <th>Producto sugerido</th>
-              <th>Precio</th>
-              <th>Confianza</th>
-              <th>Estado</th>
-            </tr>
-          </thead>
-          <tbody>
-            {document.lines.map((line) => (
-              <tr key={line.id}>
-                <td>{line.lineNumber}</td>
-                <td>{line.rawText}</td>
-                <td>{line.approvedCanonicalProductName ?? line.suggestedName ?? "Sin match"}</td>
-                <td>S/ {(line.approvedPrice ?? line.suggestedPrice ?? 0).toFixed(2)}</td>
-                <td>{Math.round(line.confidenceScore * 100)}%</td>
-                <td>
-                  <span className={line.needsReview ? "badge warning" : "badge success"}>
-                    {line.needsReview ? "Revisar" : "Listo"}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <p className="muted">{message}</p>
+      )}
+      {rows.length > 0 && (
+        <form action={approve}>
+          <p className="muted">
+            Verifica cada valor con la foto. El precio es de una presentación;
+            contenido indica cuántos KG, G, L, ML, M o unidades contiene. Usa el
+            mismo nombre solo para productos equivalentes en marca, variante y
+            calidad. Comprueba impuestos y condiciones comerciales antes de
+            aprobar. Descarta filas que no sean precios regulares.
+          </p>
+          <div className="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Incluir</th>
+                  <th>Evidencia</th>
+                  <th>Producto equivalente</th>
+                  <th>Contenido</th>
+                  <th>Unidad</th>
+                  <th>Precio presentación</th>
+                  <th>Moneda</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={r.extractedLineId}>
+                    <td>
+                      <input
+                        aria-label={`Incluir fila ${i + 1}`}
+                        type="checkbox"
+                        checked={!r.excluded}
+                        disabled={!editable || busy}
+                        onChange={(e) =>
+                          change(i, "excluded", !e.target.checked)
+                        }
+                      />
+                    </td>
+                    <td>{document.lines[i]?.rawText}</td>
+                    <td>
+                      <input
+                        aria-label={`Producto fila ${i + 1}`}
+                        value={r.canonicalName}
+                        maxLength={250}
+                        required={!r.excluded}
+                        disabled={!editable || r.excluded || busy}
+                        onChange={(e) =>
+                          change(i, "canonicalName", e.target.value)
+                        }
+                      />
+                    </td>
+                    <td>
+                      <input
+                        aria-label={`Contenido fila ${i + 1}`}
+                        type="number"
+                        min="0.000001"
+                        max="1000000"
+                        step="any"
+                        value={r.quantity}
+                        required={!r.excluded}
+                        disabled={!editable || r.excluded || busy}
+                        onChange={(e) => change(i, "quantity", e.target.value)}
+                      />
+                    </td>
+                    <td>
+                      <select
+                        aria-label={`Unidad fila ${i + 1}`}
+                        value={r.unit}
+                        required={!r.excluded}
+                        disabled={!editable || r.excluded || busy}
+                        onChange={(e) => change(i, "unit", e.target.value)}
+                      >
+                        <option value="">Seleccionar</option>
+                        {["UN", "KG", "G", "L", "ML", "M"].map((u) => (
+                          <option key={u}>{u}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      <input
+                        aria-label={`Precio fila ${i + 1}`}
+                        type="number"
+                        min="0.000001"
+                        max="1000000"
+                        step="any"
+                        value={r.price}
+                        required={!r.excluded}
+                        disabled={!editable || r.excluded || busy}
+                        onChange={(e) => change(i, "price", e.target.value)}
+                      />
+                    </td>
+                    <td>
+                      <select
+                        aria-label={`Moneda fila ${i + 1}`}
+                        value={r.currency}
+                        required={!r.excluded}
+                        disabled={!editable || r.excluded || busy}
+                        onChange={(e) => change(i, "currency", e.target.value)}
+                      >
+                        <option value="">Seleccionar</option>
+                        {["PEN", "USD", "EUR"].map((c) => (
+                          <option key={c}>{c}</option>
+                        ))}
+                      </select>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {editable && (
+            <>
+              <label className="confirmation">
+                <input
+                  type="checkbox"
+                  name="confirmed"
+                  required
+                  disabled={busy}
+                />{" "}
+                Verifiqué los valores con el archivo y las condiciones del
+                precio.
+              </label>
+              <button className="primary-button" disabled={busy}>
+                {busy ? "Guardando…" : "Aprobar precios"}
+              </button>
+              <button type="button" disabled={busy} onClick={retry}>
+                Volver a leer (usa cuota de API)
+              </button>
+            </>
+          )}
+        </form>
+      )}
+      <p role="status">{message}</p>
     </div>
   );
 }

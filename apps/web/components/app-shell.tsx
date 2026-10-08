@@ -1,24 +1,27 @@
 import Link from "next/link";
+import { LogoutButton } from "./logout-button";
 import type { ReactNode } from "react";
+import { roleLabel, type Session } from "../lib/permissions";
 
 const navigation = [
-  { href: "/", label: "Dashboard" },
+  { href: "/", label: "Resumen" },
   { href: "/suppliers", label: "Proveedores" },
   { href: "/documents", label: "Documentos" },
   { href: "/comparisons", label: "Comparaciones" },
   { href: "/history", label: "Historial" },
-  { href: "/login", label: "Login" }
+  { href: "/account", label: "Mi cuenta" },
 ] as const;
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({ children, session }: { children: ReactNode; session: Session }) {
   return (
     <div className="app-shell">
       <aside className="sidebar">
         <div>
-          <p className="eyebrow">Portfolio System</p>
+          <p className="eyebrow">Compras informadas</p>
           <h1>Sistema de Precios</h1>
+          <strong>{session.workspaceName}</strong>
           <p className="muted">
-            OCR, matching y comparacion historica para proveedores.
+            Compara precios verificados de proveedores y tiendas.
           </p>
         </div>
         <nav className="nav">
@@ -27,10 +30,13 @@ export function AppShell({ children }: { children: ReactNode }) {
               {item.label}
             </Link>
           ))}
+          {session.role === "Admin" && <Link href="/team" className="nav-link">Equipo</Link>}
         </nav>
         <div className="sidebar-card">
-          <strong>Stack</strong>
-          <span>Next.js + .NET + Rust + PostgreSQL</span>
+          <strong>{session.fullName}</strong>
+          <span>{session.email}</span>
+          <span>{roleLabel(session.role)}</span>
+          <LogoutButton />
         </div>
       </aside>
       <main className="content">{children}</main>

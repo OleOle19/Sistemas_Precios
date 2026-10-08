@@ -2,218 +2,54 @@ using Microsoft.EntityFrameworkCore;
 using SistemasPrecios.Api.Data;
 using SistemasPrecios.Api.Domain;
 using SistemasPrecios.Api.Dtos;
-
 namespace SistemasPrecios.Api.Services;
-
 public interface IComparisonQueryService
 {
-    Task<IReadOnlyList<CurrentComparisonItemDto>> GetCurrentComparisonsAsync(CancellationToken cancellationToken);
-    Task<IReadOnlyList<ComparisonHistoryItemDto>> GetHistoryAsync(Guid? productId, Guid? supplierId, CancellationToken cancellationToken);
-    Task<DashboardSummaryDto> GetDashboardSummaryAsync(CancellationToken cancellationToken);
-    Task RefreshAsync(IEnumerable<Guid> productIds, CancellationToken cancellationToken);
+    Task<IReadOnlyList<CurrentComparisonItemDto>> GetCurrentComparisonsAsync(CancellationToken ct);
+    Task<IReadOnlyList<ComparisonHistoryItemDto>> GetHistoryAsync(Guid? productId, Guid? supplierId, CancellationToken ct);
+    Task<DashboardSummaryDto> GetDashboardSummaryAsync(CancellationToken ct);
 }
-
 public sealed class ComparisonQueryService(ApplicationDbContext db) : IComparisonQueryService
 {
-    private readonly ApplicationDbContext _db = db;
-
-    public async Task<IReadOnlyList<CurrentComparisonItemDto>> GetCurrentComparisonsAsync(CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<CurrentComparisonItemDto>> GetCurrentComparisonsAsync(CancellationToken ct)
     {
-        return await _db.ComparisonResults
-            .Include(result => result.CanonicalProduct)
-            .Include(result => result.BestSupplier)
-            .OrderByDescending(result => result.PriceSpreadPercentage)
-            .Select(result => new CurrentComparisonItemDto(
-                result.CanonicalProductId,
-                result.CanonicalProduct.Name,
-                result.CanonicalProduct.BaseUnit,
-                result.BestSupplier.Name,
-                result.BestPrice,
-                result.AveragePrice,
-                result.HighestPrice,
-                result.PriceSpreadPercentage,
-                result.CalculatedAt))
-            .ToListAsync(cancellationToken);
+        var snapshots = await db.PriceSnapshots.AsNoTracking().Include(s => s.CanonicalProduct).Include(s => s.Supplier).ToListAsync(ct);
+        return snapshots.GroupBy(s => new { s.CanonicalProductId, s.Currency, s.Unit }).Select(group =>
+        {
+            var latest = group.GroupBy(s => s.SupplierId).Select(g => g.OrderByDescending(s => s.EffectiveAt).ThenByDescending(s => s.RecordedAt).ThenBy(s => s.Id).First()).ToList();
+            var best = latest.OrderBy(s => s.Price).ThenBy(s => s.Supplier.Name).First(); var avg = latest.Average(s => s.Price); var high = latest.Max(s => s.Price);
+            return new CurrentComparisonItemDto(best.CanonicalProductId, best.CanonicalProduct.Name, best.Unit, best.Supplier.Name, best.Price,
+       decimal.Round(avg, 6), high, decimal.Round((high - best.Price) / avg * 100, 2), latest.Max(s => s.RecordedAt), best.Currency, latest.Count);
+        }).OrderByDescending(c => c.SpreadPercentage).ToList();
     }
-
-    public async Task<IReadOnlyList<ComparisonHistoryItemDto>> GetHistoryAsync(
-        Guid? productId,
-        Guid? supplierId,
-        CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<ComparisonHistoryItemDto>> GetHistoryAsync(Guid? productId, Guid? supplierId, CancellationToken ct)
     {
-        var query = _db.PriceSnapshots
-            .Include(snapshot => snapshot.CanonicalProduct)
-            .Include(snapshot => snapshot.Supplier)
-            .AsQueryable();
-
-        if (productId.HasValue)
+        var query = db.PriceSnapshots.AsNoTracking().Include(s => s.CanonicalProduct).Include(s => s.Supplier).AsQueryable();
+        if (productId.HasValue) query = query.Where(s => s.CanonicalProductId == productId); if (supplierId.HasValue) query = query.Where(s => s.SupplierId == supplierId);
+        var snapshots = await query.OrderBy(s => s.EffectiveAt).ThenBy(s => s.RecordedAt).ThenBy(s => s.Id).ToListAsync(ct);
+        var previous = new Dictionary<(Guid, Guid, string, string), decimal>(); var history = new List<ComparisonHistoryItemDto>();
+        foreach (var s in snapshots)
         {
-            query = query.Where(snapshot => snapshot.CanonicalProductId == productId.Value);
+            var key = (s.CanonicalProductId, s.SupplierId, s.Currency, s.Unit);
+            var hasPrevious = previous.TryGetValue(key, out var p);
+            var variation = hasPrevious ? PriceMath.CalculateVariation(s.Price, p) : null;
+            history.Add(new(s.CanonicalProduct.Name, s.Supplier.Name, s.Unit, s.Price, s.EffectiveAt, variation, s.Currency, hasPrevious ? p : null));
+            previous[key] = s.Price;
         }
-
-        if (supplierId.HasValue)
-        {
-            query = query.Where(snapshot => snapshot.SupplierId == supplierId.Value);
-        }
-
-        var items = await query
-            .OrderBy(snapshot => snapshot.CanonicalProduct.Name)
-            .ThenBy(snapshot => snapshot.Supplier.Name)
-            .ThenBy(snapshot => snapshot.EffectiveAt)
-            .Select(snapshot => new
-            {
-                snapshot.CanonicalProduct.Name,
-                SupplierName = snapshot.Supplier.Name,
-                snapshot.Unit,
-                snapshot.Price,
-                snapshot.EffectiveAt
-            })
-            .ToListAsync(cancellationToken);
-
-        var history = new List<ComparisonHistoryItemDto>(items.Count);
-        var lastPriceByKey = new Dictionary<string, decimal>();
-
-        foreach (var item in items)
-        {
-            var key = $"{item.Name}:{item.SupplierName}";
-            var variation = lastPriceByKey.TryGetValue(key, out var previousPrice)
-                ? PriceMath.CalculateVariation(item.Price, previousPrice)
-                : null;
-
-            history.Add(new ComparisonHistoryItemDto(
-                item.Name,
-                item.SupplierName,
-                item.Unit,
-                item.Price,
-                item.EffectiveAt,
-                variation));
-
-            lastPriceByKey[key] = item.Price;
-        }
-
         return history;
     }
-
-    public async Task<DashboardSummaryDto> GetDashboardSummaryAsync(CancellationToken cancellationToken)
+    public async Task<DashboardSummaryDto> GetDashboardSummaryAsync(CancellationToken ct)
     {
-        var bestPrices = await _db.ComparisonResults
-            .Include(result => result.CanonicalProduct)
-            .Include(result => result.BestSupplier)
-            .OrderByDescending(result => result.PriceSpreadPercentage)
-            .Take(5)
-            .Select(result => new TopPriceOpportunityDto(
-                result.CanonicalProduct.Name,
-                result.BestSupplier.Name,
-                result.BestPrice,
-                result.AveragePrice,
-                result.PriceSpreadPercentage))
-            .ToListAsync(cancellationToken);
-
-        var history = await GetHistoryAsync(null, null, cancellationToken);
-        var biggestMovers = history
-            .Where(item => item.VariationPercentage.HasValue)
-            .OrderByDescending(item => Math.Abs(item.VariationPercentage!.Value))
-            .Take(5)
-            .Select(item => new PriceMoverDto(
-                item.ProductName,
-                item.SupplierName,
-                PriceMath.CalculatePreviousPrice(item.Price, item.VariationPercentage ?? 0),
-                item.Price,
-                item.VariationPercentage ?? 0))
-            .ToList();
-
-        return new DashboardSummaryDto(
-            DocumentsProcessed: await _db.Documents.CountAsync(cancellationToken),
-            SuppliersCompared: await _db.PriceSnapshots.Select(snapshot => snapshot.SupplierId).Distinct().CountAsync(cancellationToken),
-            PendingReviews: await _db.Documents.CountAsync(document => document.Status == DocumentStatus.NeedsReview, cancellationToken),
-            ProductsTracked: await _db.CanonicalProducts.CountAsync(cancellationToken),
-            BestPrices: bestPrices,
-            BiggestMovers: biggestMovers);
-    }
-
-    public async Task RefreshAsync(IEnumerable<Guid> productIds, CancellationToken cancellationToken)
-    {
-        var normalizedIds = productIds.Distinct().ToArray();
-        if (normalizedIds.Length == 0)
-        {
-            return;
-        }
-
-        var snapshots = await _db.PriceSnapshots
-            .Include(snapshot => snapshot.Supplier)
-            .Include(snapshot => snapshot.CanonicalProduct)
-            .Where(snapshot => normalizedIds.Contains(snapshot.CanonicalProductId))
-            .OrderBy(snapshot => snapshot.EffectiveAt)
-            .ToListAsync(cancellationToken);
-
-        foreach (var productId in normalizedIds)
-        {
-            var productSnapshots = snapshots
-                .Where(snapshot => snapshot.CanonicalProductId == productId)
-                .GroupBy(snapshot => snapshot.SupplierId)
-                .Select(group => group.OrderByDescending(item => item.EffectiveAt).First())
-                .ToList();
-
-            if (productSnapshots.Count == 0)
-            {
-                continue;
-            }
-
-            var best = productSnapshots.OrderBy(snapshot => snapshot.Price).First();
-            var average = productSnapshots.Average(snapshot => snapshot.Price);
-            var highest = productSnapshots.Max(snapshot => snapshot.Price);
-            var spread = average == 0 ? 0 : Math.Round(((highest - best.Price) / average) * 100, 2);
-
-            var comparison = await _db.ComparisonResults
-                .FirstOrDefaultAsync(result => result.CanonicalProductId == productId, cancellationToken);
-
-            if (comparison is null)
-            {
-                comparison = new ComparisonResult
-                {
-                    CanonicalProductId = productId
-                };
-                _db.ComparisonResults.Add(comparison);
-            }
-
-            comparison.BestSupplierId = best.SupplierId;
-            comparison.BestPrice = best.Price;
-            comparison.AveragePrice = Math.Round(average, 2);
-            comparison.HighestPrice = highest;
-            comparison.SupplierCount = productSnapshots.Count;
-            comparison.PriceSpreadPercentage = spread;
-            comparison.CalculatedAt = DateTime.UtcNow;
-        }
-
-        await _db.SaveChangesAsync(cancellationToken);
+        var current = await GetCurrentComparisonsAsync(ct); var history = await GetHistoryAsync(null, null, ct);
+        return new(await db.Documents.CountAsync(d => d.Status == DocumentStatus.Approved, ct), await db.PriceSnapshots.Select(s => s.SupplierId).Distinct().CountAsync(ct),
+         await db.Documents.CountAsync(d => d.Status == DocumentStatus.NeedsReview, ct), await db.PriceSnapshots.Select(s => s.CanonicalProductId).Distinct().CountAsync(ct),
+         current.Where(c => c.SupplierCount >= 2).Take(5).Select(c => new TopPriceOpportunityDto(c.ProductName, c.BestSupplier, c.BestPrice, c.AveragePrice, c.SpreadPercentage, c.Currency, c.BaseUnit)).ToList(),
+         history.Where(h => h.VariationPercentage.HasValue).OrderByDescending(h => Math.Abs(h.VariationPercentage!.Value)).Take(5)
+         .Select(h => new PriceMoverDto(h.ProductName, h.SupplierName, h.PreviousPrice!.Value, h.Price, h.VariationPercentage!.Value, h.Currency, h.Unit)).ToList());
     }
 }
-
 public static class PriceMath
 {
-    public static decimal? CalculateVariation(decimal currentPrice, decimal previousPrice)
-    {
-        if (previousPrice == 0)
-        {
-            return null;
-        }
-
-        return Math.Round(((currentPrice - previousPrice) / previousPrice) * 100, 2);
-    }
-
-    public static decimal CalculatePreviousPrice(decimal currentPrice, decimal variationPercentage)
-    {
-        if (variationPercentage == -100)
-        {
-            return 0;
-        }
-
-        var divisor = 1 + (variationPercentage / 100);
-        if (divisor == 0)
-        {
-            return 0;
-        }
-
-        return Math.Round(currentPrice / divisor, 2);
-    }
+    public static decimal? CalculateVariation(decimal currentPrice, decimal previousPrice) => previousPrice == 0 ? null : Math.Round((currentPrice - previousPrice) / previousPrice * 100, 2);
+    public static decimal CalculatePreviousPrice(decimal currentPrice, decimal variationPercentage) => variationPercentage == -100 ? 0 : Math.Round(currentPrice / (1 + variationPercentage / 100), 2);
 }

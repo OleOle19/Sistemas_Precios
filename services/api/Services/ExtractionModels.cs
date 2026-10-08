@@ -9,9 +9,9 @@ public sealed record StructuredExtractionLine(
     string? SuggestedUnit,
     decimal? SuggestedQuantity,
     decimal? SuggestedPrice,
-    decimal ConfidenceScore);
+    decimal ConfidenceScore, string? SuggestedCurrency = null);
 
 public sealed record ProductMatchCandidate(
     Guid CanonicalProductId,
     string CanonicalProductName,
-    decimal ConfidenceScore);
+    decimal ConfidenceScore, string? SuggestedCurrency = null);

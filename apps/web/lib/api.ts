@@ -1,74 +1,44 @@
-import {
-  mockComparisons,
-  mockDashboard,
-  mockDocumentDetail,
-  mockDocuments,
-  mockHistory,
-  mockSuppliers
-} from "./mock-data";
+import { cookies } from "next/headers";
+import { redirect, notFound } from "next/navigation";
+import { cache } from "react";
+import type { Session } from "./permissions";
 import type {
   ComparisonHistoryItem,
   CurrentComparison,
   DashboardSummary,
   DocumentDetail,
   DocumentSummary,
-  Supplier
+  Supplier,
 } from "./types";
-
-const API_BASE_URL =
-  process.env.API_BASE_URL ??
-  process.env.NEXT_PUBLIC_API_BASE_URL ??
-  "http://localhost:8080";
-
-async function requestJson<T>(path: string, init?: RequestInit, fallback?: T): Promise<T> {
+const base = process.env.API_BASE_URL ?? "http://localhost:8080";
+export const requireSession = cache(() => requestJson<Session>("/auth/me"));
+export const getTeamUsers = () => requestJson<{ id: string; fullName: string; email: string; role: string }[]>("/team/users");
+async function requestJson<T>(path: string): Promise<T> {
+  let response: Response;
   try {
-    const response = await fetch(`${API_BASE_URL}${path}`, {
-      ...init,
+    response = await fetch(`${base}${path}`, {
       cache: "no-store",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-        ...(init?.headers ?? {})
-      }
+      headers: { cookie: (await cookies()).toString() },
+      signal: AbortSignal.timeout(10000),
     });
-
-    if (!response.ok) {
-      throw new Error(`Request failed with status ${response.status}`);
-    }
-
-    return (await response.json()) as T;
   } catch {
-    if (fallback !== undefined) {
-      return fallback;
-    }
-
-    throw new Error(`No se pudo obtener ${path}`);
+    throw new Error("El servicio no está disponible. Intenta nuevamente.");
   }
+  if (response.status === 401) redirect("/login");
+  if (response.status === 404) notFound();
+  if (!response.ok)
+    throw new Error("No se pudieron cargar los datos. Intenta nuevamente.");
+  return response.json() as Promise<T>;
 }
-
-export async function getDashboardSummary(): Promise<DashboardSummary> {
-  return requestJson("/dashboard/summary", undefined, mockDashboard);
-}
-
-export async function getSuppliers(): Promise<Supplier[]> {
-  return requestJson("/suppliers", undefined, mockSuppliers);
-}
-
-export async function getDocuments(): Promise<DocumentSummary[]> {
-  return requestJson("/documents", undefined, mockDocuments);
-}
-
-export async function getDocumentDetail(id: string): Promise<DocumentDetail> {
-  return requestJson(`/documents/${id}`, undefined, {
-    ...mockDocumentDetail,
-    id
-  });
-}
-
-export async function getCurrentComparisons(): Promise<CurrentComparison[]> {
-  return requestJson("/comparisons/current", undefined, mockComparisons);
-}
-
-export async function getComparisonHistory(): Promise<ComparisonHistoryItem[]> {
-  return requestJson("/comparisons/history", undefined, mockHistory);
-}
+export const getDashboardSummary = () =>
+  requestJson<DashboardSummary>("/dashboard/summary");
+export const getSuppliers = () => requestJson<Supplier[]>("/suppliers");
+export const getDocuments = () => requestJson<DocumentSummary[]>("/documents");
+export const getDocumentDetail = (id: string) =>
+  requestJson<DocumentDetail>(`/documents/${encodeURIComponent(id)}`);
+export const getCurrentComparisons = () =>
+  requestJson<CurrentComparison[]>("/comparisons/current");
+export const getComparisonHistory = () =>
+  requestJson<ComparisonHistoryItem[]>("/comparisons/history");
+export const getExtractionSettings = () =>
+  requestJson<{ configured: boolean; model: string; provider: string }>("/settings/extraction");

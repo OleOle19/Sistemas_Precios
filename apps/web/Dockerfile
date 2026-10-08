@@ -1,9 +1,9 @@
 FROM node:22-bookworm-slim AS deps
 WORKDIR /app
 
-COPY package.json ./
+COPY package.json package-lock.json ./
 COPY apps/web/package.json ./apps/web/package.json
-RUN npm install --workspace web
+RUN npm ci
 
 FROM node:22-bookworm-slim AS build
 WORKDIR /app

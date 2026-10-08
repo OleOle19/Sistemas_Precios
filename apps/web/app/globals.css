@@ -251,6 +251,7 @@ th {
   min-height: calc(100vh - 4rem);
   display: grid;
   place-items: center;
+  padding: 1rem;
 }
 
 .auth-card {
@@ -299,3 +300,13 @@ th {
     padding: 1rem;
   }
 }
+button:disabled { opacity: .55; cursor: default; }
+button { cursor: pointer; }
+.table-wrapper input:not([type=checkbox]), .table-wrapper select { padding: .65rem; border: 1px solid var(--line); border-radius: .5rem; width: 135px; }
+.table-wrapper td:nth-child(3) input { width: 240px; }
+.document-preview { display: block; max-width: 100%; max-height: 480px; object-fit: contain; margin: 1rem 0; border-radius: 1rem; }
+.file-link { display: inline-block; text-decoration: underline; color: var(--accent-strong); margin: 1rem 0; }
+.confirmation { display: block; margin: 1.5rem 0; }
+.table-wrapper + .primary-button, form button + button { margin-left: .75rem; }
+.sidebar .muted { color: #d9cbbb; }
+:focus-visible { outline: 3px solid #2e806c; outline-offset: 3px; }

@@ -1,9 +1,11 @@
-import { getSuppliers } from "../../lib/api";
+import { SupplierForm } from "../../../components/supplier-form";
+import { getSuppliers, requireSession } from "../../../lib/api";
+import { canEditPrices } from "../../../lib/permissions";
 
 export const dynamic = "force-dynamic";
 
 export default async function SuppliersPage() {
-  const suppliers = await getSuppliers();
+  const [suppliers, session] = await Promise.all([getSuppliers(), requireSession()]);
 
   return (
     <div className="page-stack">
@@ -13,11 +15,14 @@ export default async function SuppliersPage() {
           <h2>Proveedores</h2>
         </div>
       </section>
+      {canEditPrices(session) && <SupplierForm />}
       <div className="grid cards-grid">
         {suppliers.map((supplier) => (
           <article key={supplier.id} className="card">
             <strong>{supplier.name}</strong>
-            <p className="muted">{supplier.contactEmail ?? "Sin correo registrado"}</p>
+            <p className="muted">
+              {supplier.contactEmail ?? "Sin correo registrado"}
+            </p>
             <p>{supplier.documentCount} documentos asociados</p>
           </article>
         ))}

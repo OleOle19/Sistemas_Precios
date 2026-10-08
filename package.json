@@ -6,9 +6,12 @@
     "apps/web"
   ],
   "scripts": {
-    "dev:web": "npm.cmd --workspace web run dev",
-    "build:web": "npm.cmd --workspace web run build",
-    "lint:web": "npm.cmd --workspace web run lint",
-    "test:web:e2e": "npm.cmd --workspace web run test:e2e"
+    "dev:web": "npm --workspace web run dev",
+    "build:web": "npm --workspace web run build",
+    "test:web:e2e": "npm --workspace web run test:e2e",
+    "check:web": "npm --workspace web run check"
+  },
+  "overrides": {
+    "postcss": "8.5.29"
   }
 }

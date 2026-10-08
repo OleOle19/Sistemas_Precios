@@ -15,6 +15,35 @@ public static class ApiRoutes
     public static void MapApiRoutes(this IEndpointRouteBuilder app)
     {
         app.MapPost("/auth/login", LoginAsync);
+        app.MapGet("/auth/me", (HttpContext http,IConfiguration config) => Results.Ok(new SessionResponse(
+            Guid.Parse(http.User.FindFirstValue(ClaimTypes.NameIdentifier)!),
+            http.User.FindFirstValue(ClaimTypes.Name)!,http.User.FindFirstValue(ClaimTypes.Email)!,http.User.FindFirstValue(ClaimTypes.Role)!,
+            config["Workspace:Name"] ?? "Mi negocio"))).RequireAuthorization();
+        app.MapGet("/team/users", async (ApplicationDbContext db,CancellationToken ct) => Results.Ok(
+            await db.Users.AsNoTracking().OrderBy(u=>u.FullName).Select(u=>new TeamUserResponse(u.Id,u.FullName,u.Email,u.Role.ToString())).ToListAsync(ct))).RequireAuthorization("ManageTeam");
+        app.MapPost("/team/users", async (CreateTeamUserRequest request,TeamService team,CancellationToken ct) =>
+        {
+            try { var user=await team.CreateAsync(request,ct); return Results.Created($"/team/users/{user.Id}",user); }
+            catch(ArgumentException ex) { return Results.BadRequest(new {message=ex.Message}); }
+            catch(DbUpdateException) { return Results.Conflict(new {message="Ese correo ya está registrado. Recarga el equipo."}); }
+        }).RequireAuthorization("ManageTeam");
+        app.MapPost("/team/users/{id:guid}/role", async (Guid id,UpdateTeamRoleRequest request,HttpContext http,TeamService team,CancellationToken ct) =>
+        {
+            try { return Results.Ok(await team.ChangeRoleAsync(Guid.Parse(http.User.FindFirstValue(ClaimTypes.NameIdentifier)!),id,request.Role,ct)); }
+            catch(ArgumentException ex) { return Results.BadRequest(new {message=ex.Message}); }
+            catch(UnauthorizedAccessException) { return Results.Forbid(); }
+            catch(DbUpdateException) { return Results.Conflict(new {message="El equipo cambió. Recarga y vuelve a intentar."}); }
+        }).RequireAuthorization("ManageTeam");
+        app.MapPost("/auth/password", async (ChangePasswordRequest request,HttpContext http,TeamService team,CancellationToken ct) =>
+        {
+            try
+            {
+                await team.ChangePasswordAsync(Guid.Parse(http.User.FindFirstValue(ClaimTypes.NameIdentifier)!),request,ct);
+                await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                return Results.NoContent();
+            }
+            catch(ArgumentException ex) { return Results.BadRequest(new {message=ex.Message}); }
+        }).RequireAuthorization();
         app.MapPost("/auth/logout", async (HttpContext httpContext) =>
         {
             await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
@@ -22,17 +51,32 @@ public static class ApiRoutes
         }).RequireAuthorization();
 
         app.MapGet("/suppliers", GetSuppliersAsync).RequireAuthorization();
-        app.MapPost("/suppliers", CreateSupplierAsync).RequireAuthorization();
+        app.MapPost("/suppliers", CreateSupplierAsync).RequireAuthorization("EditPrices");
 
         app.MapGet("/documents", GetDocumentsAsync).RequireAuthorization();
         app.MapGet("/documents/{id:guid}", GetDocumentAsync).RequireAuthorization();
-        app.MapPost("/documents", UploadDocumentAsync).RequireAuthorization();
-        app.MapPost("/documents/{id:guid}/reprocess", ReprocessDocumentAsync).RequireAuthorization();
-        app.MapPost("/documents/{id:guid}/review", ReviewDocumentAsync).RequireAuthorization();
+        app.MapGet("/documents/{id:guid}/file", async (Guid id, ApplicationDbContext db, CancellationToken ct) =>
+        {
+            var d = await db.Documents.AsNoTracking().SingleOrDefaultAsync(d => d.Id == id, ct);
+            return d is null || !File.Exists(d.FilePath) ? Results.NotFound() : Results.File(d.FilePath, d.ContentType, enableRangeProcessing: true);
+        }).RequireAuthorization();
+        app.MapGet("/settings/extraction", (IConfiguration config) =>
+        {
+            var provider = PriceExtractionSettings.Provider(config);
+            return Results.Ok(new
+            {
+                provider,
+                configured = !string.IsNullOrWhiteSpace(PriceExtractionSettings.Key(config, provider)),
+                model = PriceExtractionSettings.Model(config, provider)
+            });
+        }).RequireAuthorization();
+        app.MapPost("/documents", UploadDocumentAsync).RequireAuthorization("EditPrices");
+        app.MapPost("/documents/{id:guid}/reprocess", ReprocessDocumentAsync).RequireAuthorization("EditPrices");
+        app.MapPost("/documents/{id:guid}/review", ReviewDocumentAsync).RequireAuthorization("EditPrices");
 
         app.MapGet("/comparisons/current", GetCurrentComparisonsAsync).RequireAuthorization();
         app.MapGet("/comparisons/history", GetHistoryAsync).RequireAuthorization();
-        app.MapPost("/matches/{id:guid}/approve", ApproveMatchAsync).RequireAuthorization();
+
         app.MapGet("/dashboard/summary", GetDashboardSummaryAsync).RequireAuthorization();
     }
 
@@ -43,26 +87,17 @@ public static class ApiRoutes
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
-        var user = await db.Users.FirstOrDefaultAsync(item => item.Email == request.Email, cancellationToken);
-        if (user is null || !passwordService.VerifyPassword(request.Password, user.PasswordHash))
+        if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password) || request.Email.Length > 250 || request.Password.Length > 500)
+            return Results.Unauthorized();
+        var user = await db.Users.FirstOrDefaultAsync(item => item.Email == request.Email.Trim().ToLower(), cancellationToken);
+        if (user is null || !UserSessions.Enabled(user) || !passwordService.VerifyPassword(request.Password, user.PasswordHash))
         {
             return Results.Unauthorized();
         }
 
-        var claims = new List<Claim>
-        {
-            new(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new(ClaimTypes.Name, user.FullName),
-            new(ClaimTypes.Email, user.Email),
-            new(ClaimTypes.Role, user.Role.ToString())
-        };
-
-        var principal = new ClaimsPrincipal(
-            new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme));
-
         await httpContext.SignInAsync(
             CookieAuthenticationDefaults.AuthenticationScheme,
-            principal);
+            UserSessions.Principal(user));
 
         return Results.Ok(new LoggedInUserResponse(user.Id, user.FullName, user.Email, user.Role.ToString()));
     }
@@ -86,6 +121,10 @@ public static class ApiRoutes
         ApplicationDbContext db,
         CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(request.Name) || request.Name.Trim().Length > 250 || request.ContactEmail?.Length > 250)
+            return Results.BadRequest(new { message = "Escribe un nombre de hasta 250 caracteres." });
+        if (await db.Suppliers.AnyAsync(s => s.Name.ToLower() == request.Name.Trim().ToLower(), cancellationToken))
+            return Results.Conflict(new { message = "Ese proveedor ya existe." });
         var supplier = new Supplier
         {
             Name = request.Name.Trim(),
@@ -144,9 +183,13 @@ public static class ApiRoutes
         var form = await request.ReadFormAsync(cancellationToken);
         var file = form.Files["file"];
         var supplierIdRaw = form["supplierId"].ToString();
-        var ocrText = form["ocrText"].ToString();
+        var sourceKind = form["sourceKind"].ToString();
+        if (sourceKind is not ("quotation" or "label")) return Results.BadRequest(new { message = "Selecciona cotización o etiqueta." });
+        if (!DateTime.TryParseExact(form["observedDate"].ToString(), "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var observedAt) || observedAt.Date > DateTime.UtcNow.Date)
+            return Results.BadRequest(new { message = "Indica una fecha válida sin anticipar observaciones futuras." });
+        observedAt = DateTime.SpecifyKind(observedAt, DateTimeKind.Utc);
 
-        if (file is null || file.Length == 0 || !Guid.TryParse(supplierIdRaw, out var supplierId))
+        if (file is null || file.Length == 0 || file.Length > 10 * 1024 * 1024 || !Guid.TryParse(supplierIdRaw, out var supplierId))
         {
             return Results.BadRequest(new { message = "Debes enviar supplierId y un archivo valido." });
         }
@@ -175,7 +218,14 @@ public static class ApiRoutes
         var datedFolder = Path.Combine(rootPath, DateTime.UtcNow.ToString("yyyy"), DateTime.UtcNow.ToString("MM"));
         Directory.CreateDirectory(datedFolder);
 
-        var storedFileName = $"{Guid.NewGuid():N}{Path.GetExtension(file.FileName)}";
+        await using (var input = file.OpenReadStream())
+        {
+            var header = new byte[12]; var read = await input.ReadAsync(header, cancellationToken);
+            if (!FileSignature.IsValid(header.AsSpan(0, read), file.ContentType))
+                return Results.BadRequest(new { message = "El contenido del archivo no coincide con una foto o PDF válido." });
+        }
+        var extension = file.ContentType switch { "image/jpeg" => ".jpg", "image/png" => ".png", "image/webp" => ".webp", _ => ".pdf" };
+        var storedFileName = $"{Guid.NewGuid():N}{extension}";
         var filePath = Path.Combine(datedFolder, storedFileName);
 
         await using (var stream = File.Create(filePath))
@@ -183,16 +233,12 @@ public static class ApiRoutes
             await file.CopyToAsync(stream, cancellationToken);
         }
 
-        if (!string.IsNullOrWhiteSpace(ocrText))
-        {
-            var sidecarPath = Path.ChangeExtension(filePath, ".txt");
-            await File.WriteAllTextAsync(sidecarPath, ocrText.Trim(), cancellationToken);
-        }
-
         var document = new Document
         {
             SupplierId = supplierId,
-            FileName = file.FileName,
+            FileName = Path.GetFileName(file.FileName)[..Math.Min(Path.GetFileName(file.FileName).Length, 250)],
+            SourceKind = sourceKind,
+            ObservedAt = observedAt,
             StoredFileName = storedFileName,
             ContentType = file.ContentType,
             FilePath = filePath,
@@ -228,6 +274,8 @@ public static class ApiRoutes
             return Results.NotFound();
         }
 
+        if (document.Status is not (DocumentStatus.Failed or DocumentStatus.NeedsReview))
+            return Results.Conflict(new { message = "Solo puedes volver a leer archivos fallidos o pendientes de revisión." });
         document.Status = DocumentStatus.Uploaded;
         document.FailureReason = null;
         await db.SaveChangesAsync(cancellationToken);
@@ -242,8 +290,9 @@ public static class ApiRoutes
         IDocumentProcessingService documentProcessingService,
         CancellationToken cancellationToken)
     {
-        var detail = await documentProcessingService.ReviewDocumentAsync(id, request, cancellationToken);
-        return Results.Ok(detail);
+        try { return Results.Ok(await documentProcessingService.ReviewDocumentAsync(id, request, cancellationToken)); }
+        catch (ArgumentException ex) { return Results.BadRequest(new { message = ex.Message }); }
+        catch (DbUpdateException) { return Results.Conflict(new { message = "Los datos cambiaron. Recarga y vuelve a revisar." }); }
     }
 
     private static async Task<IResult> GetCurrentComparisonsAsync(
@@ -262,15 +311,6 @@ public static class ApiRoutes
     {
         var result = await comparisonQueryService.GetHistoryAsync(productId, supplierId, cancellationToken);
         return Results.Ok(result);
-    }
-
-    private static async Task<IResult> ApproveMatchAsync(
-        Guid id,
-        IDocumentProcessingService documentProcessingService,
-        CancellationToken cancellationToken)
-    {
-        await documentProcessingService.ApproveMatchAsync(id, cancellationToken);
-        return Results.NoContent();
     }
 
     private static async Task<IResult> GetDashboardSummaryAsync(
