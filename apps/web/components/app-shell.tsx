@@ -1,13 +1,14 @@
 import Link from "next/link";
+import { LogoutButton } from "./logout-button";
 import type { ReactNode } from "react";
 
 const navigation = [
-  { href: "/", label: "Dashboard" },
+  { href: "/", label: "Resumen" },
   { href: "/suppliers", label: "Proveedores" },
   { href: "/documents", label: "Documentos" },
   { href: "/comparisons", label: "Comparaciones" },
   { href: "/history", label: "Historial" },
-  { href: "/login", label: "Login" }
+  { href: "/login", label: "Ingresar" },
 ] as const;
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -15,10 +16,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="app-shell">
       <aside className="sidebar">
         <div>
-          <p className="eyebrow">Portfolio System</p>
+          <p className="eyebrow">Compras informadas</p>
           <h1>Sistema de Precios</h1>
           <p className="muted">
-            OCR, matching y comparacion historica para proveedores.
+            Compara precios verificados de proveedores y tiendas.
           </p>
         </div>
         <nav className="nav">
@@ -29,8 +30,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           ))}
         </nav>
         <div className="sidebar-card">
-          <strong>Stack</strong>
-          <span>Next.js + .NET + Rust + PostgreSQL</span>
+          <strong>Verifica antes de decidir</strong>
+          <span>Los precios aprobados conservan el documento original.</span>
+          <LogoutButton />
         </div>
       </aside>
       <main className="content">{children}</main>

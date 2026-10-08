@@ -1,3 +1,4 @@
+import { money } from "../../lib/display";
 import { getComparisonHistory } from "../../lib/api";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +15,7 @@ export default async function HistoryPage() {
             <h2>Historial de precios</h2>
           </div>
         </div>
+        {history.length === 0 && <p>Aún no hay precios aprobados.</p>}
         <div className="table-wrapper">
           <table>
             <thead>
@@ -30,9 +32,13 @@ export default async function HistoryPage() {
                 <tr key={`${item.productName}-${index}`}>
                   <td>{item.productName}</td>
                   <td>{item.supplierName}</td>
-                  <td>S/ {item.price.toFixed(2)}</td>
-                  <td>{new Date(item.effectiveAt).toLocaleDateString("es-PE")}</td>
-                  <td>{item.variationPercentage?.toFixed(2) ?? "N/A"}%</td>
+                  <td>{money(item.price, item.currency, item.unit)}</td>
+                  <td>{item.effectiveAt.slice(0, 10)}</td>
+                  <td>
+                    {item.variationPercentage == null
+                      ? "Sin precio anterior"
+                      : `${item.variationPercentage.toFixed(2)}%`}
+                  </td>
                 </tr>
               ))}
             </tbody>

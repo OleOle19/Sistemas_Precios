@@ -1,84 +1,99 @@
 "use client";
-
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import type { Supplier } from "../lib/types";
-
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
-
-export function DocumentUploadForm({ suppliers }: { suppliers: Supplier[] }) {
-  const [message, setMessage] = useState<string>("Aun no se envio ningun archivo.");
-
-  async function handleSubmit(formData: FormData) {
-    const supplierId = formData.get("supplierId");
-    const file = formData.get("file");
-
-    if (!supplierId || !(file instanceof File) || file.size === 0) {
-      setMessage("Selecciona un proveedor y un archivo valido.");
+import { submit } from "../lib/submit";
+export function DocumentUploadForm({
+  suppliers,
+  configured,
+}: {
+  suppliers: Supplier[];
+  configured: boolean;
+}) {
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  const router = useRouter();
+  async function send(data: FormData) {
+    const file = data.get("file");
+    if (
+      !(file instanceof File) ||
+      file.size === 0 ||
+      file.size > 10 * 1024 * 1024
+    ) {
+      setMessage("Selecciona una foto o PDF de hasta 10 MB.");
       return;
     }
-
+    setBusy(true);
     try {
-      const payload = new FormData();
-      payload.append("supplierId", String(supplierId));
-      payload.append("file", file);
-
-      const response = await fetch(`${apiBaseUrl}/documents`, {
-        method: "POST",
-        body: payload,
-        credentials: "include"
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          setMessage("La sesion no esta activa. Inicia sesion y vuelve a intentar.");
-          return;
-        }
-
-        const responseText = await response.text();
-        setMessage(`La API respondio con error ${response.status}. ${responseText.slice(0, 180)}`);
-        return;
-      }
-
-      setMessage(`Archivo ${file.name} enviado. El backend lo pondra en cola.`);
-    } catch {
-      setMessage("No se pudo conectar con la API. Verifica que el backend este corriendo en localhost:8080.");
+      const doc = await submit("/documents", data);
+      router.push(`/documents/${doc.id}`);
+      router.refresh();
+    } catch (e) {
+      setMessage((e as Error).message);
+    } finally {
+      setBusy(false);
     }
   }
-
   return (
-    <form action={handleSubmit} className="card form-card">
-      <div className="section-heading">
-        <div>
-          <p className="eyebrow">Ingreso</p>
-          <h2>Subir lista de precios</h2>
-        </div>
-      </div>
+    <form action={send} className="card form-card">
+      <h2>Subir foto o cotización</h2>
+      {!configured && (
+        <p role="status">
+          La lectura de fotos requiere configurar la clave de OpenAI en el
+          servidor.
+        </p>
+      )}
+      {!suppliers.length && (
+        <p>Registra primero un proveedor o tienda en Proveedores.</p>
+      )}
       <label className="field">
-        <span>Proveedor</span>
-        <select name="supplierId" defaultValue={suppliers[0]?.id}>
-          {suppliers.map((supplier) => (
-            <option key={supplier.id} value={supplier.id}>
-              {supplier.name}
+        <span>Proveedor o tienda</span>
+        <select name="supplierId" required>
+          {suppliers.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
             </option>
           ))}
         </select>
       </label>
       <label className="field">
-        <span>Foto o PDF</span>
-        <input name="file" type="file" accept="image/*,application/pdf" />
+        <span>Tipo de fuente</span>
+        <select name="sourceKind">
+          <option value="quotation">Lista o cotización</option>
+          <option value="label">Etiqueta de tienda</option>
+        </select>
       </label>
       <label className="field">
-        <span>Texto de apoyo OCR (opcional)</span>
-        <textarea
-          name="ocrText"
-          rows={8}
-          placeholder="Pega aqui las lineas esperadas del documento para una prueba controlada."
+        <span>Fecha del precio observado</span>
+        <input
+          name="observedDate"
+          type="date"
+          required
+          defaultValue={new Date().toLocaleDateString("sv-SE")}
+          max={new Date().toLocaleDateString("sv-SE")}
         />
       </label>
-      <button type="submit" className="primary-button">
-        Enviar a procesamiento
+      <label className="field">
+        <span>Foto o PDF (máximo 10 MB)</span>
+        <input
+          name="file"
+          type="file"
+          required
+          accept="image/jpeg,image/png,image/webp,application/pdf"
+        />
+      </label>
+      <p className="muted">
+        Se enviará este archivo a OpenAI para leer sus precios. Cada lectura
+        consume saldo de tu API. Usa fotos enfocadas y evita incluir datos
+        personales innecesarios.
+      </p>
+      <button
+        className="primary-button"
+        disabled={busy || !configured || !suppliers.length}
+      >
+        {busy ? "Enviando…" : "Enviar para leer precios"}
       </button>
-      <p className="muted">{message}</p>
+      <p role="status">{message}</p>
     </form>
   );
 }

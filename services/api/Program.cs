@@ -1,5 +1,3 @@
-using Hangfire;
-using Hangfire.PostgreSql;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -10,11 +8,22 @@ using SistemasPrecios.Api.Endpoints;
 using SistemasPrecios.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+LocalSecrets.Load(builder.Configuration, builder.Environment.ContentRootPath);
 var databaseProvider = builder.Configuration["Database:Provider"] ?? "Sqlite";
 var usePostgres = string.Equals(databaseProvider, "Postgres", StringComparison.OrdinalIgnoreCase);
-EnsureLocalSqliteDirectory(builder.Configuration, usePostgres);
+var useSqlServer = string.Equals(databaseProvider, "SqlServer", StringComparison.OrdinalIgnoreCase);
+if (!usePostgres && !useSqlServer && !string.Equals(databaseProvider, "Sqlite", StringComparison.OrdinalIgnoreCase))
+    throw new InvalidOperationException("Usa Database:Provider Sqlite, SqlServer o Postgres.");
+if (!usePostgres && !useSqlServer)
+{
+    var sqlite = new SqliteConnectionStringBuilder(builder.Configuration.GetConnectionString("DefaultConnection"));
+    if (sqlite.DataSource != ":memory:") sqlite.DataSource = Path.GetFullPath(sqlite.DataSource, builder.Environment.ContentRootPath);
+    builder.Configuration["ConnectionStrings:DefaultConnection"] = sqlite.ToString();
+}
+EnsureLocalSqliteDirectory(builder.Configuration, usePostgres || useSqlServer);
 
 builder.Services.Configure<StorageOptions>(builder.Configuration.GetSection(StorageOptions.SectionName));
+builder.Services.PostConfigure<StorageOptions>(o => o.RootPath = Path.GetFullPath(o.RootPath, builder.Environment.ContentRootPath));
 builder.Services.Configure<MatchingOptions>(builder.Configuration.GetSection(MatchingOptions.SectionName));
 
 builder.Services.AddProblemDetails();
@@ -64,40 +73,21 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     {
         options.UseNpgsql(connectionString);
     }
+    else if (useSqlServer)
+    {
+        options.UseSqlServer(connectionString);
+    }
     else
     {
         options.UseSqlite(connectionString);
     }
 });
 
-if (usePostgres)
-{
-    builder.Services.AddHangfire(configuration =>
-    {
-        configuration
-            .UseSimpleAssemblyNameTypeSerializer()
-            .UseRecommendedSerializerSettings()
-            .UsePostgreSqlStorage(c =>
-                c.UseNpgsqlConnection(
-                    builder.Configuration.GetConnectionString("DefaultConnection")));
-    });
-    builder.Services.AddHangfireServer();
-    builder.Services.AddScoped<IDocumentJobScheduler, HangfireDocumentJobScheduler>();
-}
-else
-{
-    builder.Services.AddScoped<IDocumentJobScheduler, InlineDocumentJobScheduler>();
-}
-
-var visionUrl = builder.Configuration["Vision:GrpcUrl"] ?? "http://localhost:50051";
-builder.Services.AddGrpcClient<Vision.VisionProcessor.VisionProcessorClient>(options =>
-{
-    options.Address = new Uri(visionUrl);
-});
-
+builder.Services.AddScoped<IDocumentJobScheduler, DocumentJobScheduler>();
+builder.Services.AddHostedService<DocumentWorker>();
+builder.Services.AddHttpClient<IPriceExtractor, OpenAiPriceExtractor>(http => http.Timeout = TimeSpan.FromSeconds(120));
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(o => o.MultipartBodyLengthLimit = 11 * 1024 * 1024);
 builder.Services.AddScoped<IPasswordService, PasswordService>();
-builder.Services.AddScoped<IVisionExtractionClient, GrpcVisionExtractionClient>();
-builder.Services.AddScoped<IExtractionStructurer, MockExtractionStructurer>();
 builder.Services.AddScoped<IProductMatchingService, ProductMatchingService>();
 builder.Services.AddScoped<IComparisonQueryService, ComparisonQueryService>();
 builder.Services.AddScoped<IDocumentProcessingService, DocumentProcessingService>();
@@ -106,13 +96,17 @@ var app = builder.Build();
 
 app.UseExceptionHandler();
 app.UseCors("web");
+app.Use(async (context, next) =>
+{
+    if (HttpMethods.IsPost(context.Request.Method) && context.Request.Headers.TryGetValue("Origin", out var origin))
+    {
+        var allowed = builder.Configuration.GetSection("Web:Origins").Get<string[]>() ?? ["http://localhost:3000", "http://127.0.0.1:3000"];
+        if (!allowed.Contains(origin.ToString())) { context.Response.StatusCode = 403; return; }
+    }
+    await next(context);
+});
 app.UseAuthentication();
 app.UseAuthorization();
-if (usePostgres)
-{
-    app.UseHangfireDashboard("/hangfire");
-}
-
 app.MapGet("/healthz", () => Results.Ok(new
 {
     status = "ok",
@@ -129,6 +123,8 @@ await using (var scope = app.Services.CreateAsyncScope())
     {
         await EnsureApplicationSchemaAsync(db);
     }
+    try { await db.Documents.Select(d => d.SourceKind).Take(1).ToListAsync(); }
+    catch (Exception) { throw new InvalidOperationException("La base de datos pertenece al prototipo anterior. Conserva una copia y usa una base nueva para v2; no se modifica ni borra automáticamente."); }
     await SeedDataService.InitializeAsync(scope.ServiceProvider);
 }
 

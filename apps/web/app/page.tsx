@@ -1,3 +1,4 @@
+import { money } from "../lib/display";
 import { SummaryCards } from "../components/summary-cards";
 import { getDashboardSummary } from "../lib/api";
 
@@ -10,12 +11,13 @@ export default async function HomePage() {
     <div className="page-stack">
       <section className="hero-card">
         <div>
-          <p className="eyebrow">Decision intelligence</p>
+          <p className="eyebrow">Comparación de precios</p>
           <h2>Compara proveedores a partir de fotos y listas comerciales.</h2>
         </div>
         <p className="hero-copy">
-          El flujo combina OCR, matching automatico y trazabilidad historica para detectar
-          mejores precios, variaciones y documentos pendientes de validacion.
+          Sube una foto, verifica sus precios y compara productos equivalentes
+          por unidad y moneda. Conserva el archivo original y el historial de
+          cada proveedor.
         </p>
       </section>
 
@@ -30,15 +32,25 @@ export default async function HomePage() {
             </div>
           </div>
           <div className="list-stack">
+            {!summary.bestPrices.length && (
+              <p>Aún no hay precios de dos proveedores para comparar.</p>
+            )}
             {summary.bestPrices.map((item) => (
-              <div key={`${item.productName}-${item.supplierName}`} className="list-row">
+              <div
+                key={`${item.productName}-${item.supplierName}-${item.currency}-${item.unit}`}
+                className="list-row"
+              >
                 <div>
                   <strong>{item.productName}</strong>
                   <p className="muted">{item.supplierName}</p>
                 </div>
                 <div className="numeric-block">
-                  <strong>S/ {item.bestPrice.toFixed(2)}</strong>
-                  <span>{item.spreadPercentage.toFixed(1)}% spread</span>
+                  <strong>
+                    {money(item.bestPrice, item.currency, item.unit)}
+                  </strong>
+                  <span>
+                    {item.spreadPercentage.toFixed(1)}% de diferencia relativa
+                  </span>
                 </div>
               </div>
             ))}
@@ -53,8 +65,17 @@ export default async function HomePage() {
             </div>
           </div>
           <div className="list-stack">
+            {!summary.biggestMovers.length && (
+              <p>
+                Las variaciones aparecerán cuando registres nuevas
+                observaciones.
+              </p>
+            )}
             {summary.biggestMovers.map((item) => (
-              <div key={`${item.productName}-${item.supplierName}`} className="list-row">
+              <div
+                key={`${item.productName}-${item.supplierName}-${item.currency}-${item.unit}`}
+                className="list-row"
+              >
                 <div>
                   <strong>{item.productName}</strong>
                   <p className="muted">{item.supplierName}</p>
@@ -62,7 +83,8 @@ export default async function HomePage() {
                 <div className="numeric-block">
                   <strong>{item.variationPercentage.toFixed(2)}%</strong>
                   <span>
-                    S/ {item.previousPrice.toFixed(2)} → S/ {item.currentPrice.toFixed(2)}
+                    {money(item.previousPrice, item.currency, item.unit)} →{" "}
+                    {money(item.currentPrice, item.currency, item.unit)}
                   </span>
                 </div>
               </div>

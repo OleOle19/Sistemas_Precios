@@ -13,11 +13,15 @@ export type TopPriceOpportunity = {
   bestPrice: number;
   averagePrice: number;
   spreadPercentage: number;
+  currency: string;
+  unit: string;
 };
 
 export type PriceMover = {
   productName: string;
   supplierName: string;
+  currency: string;
+  unit: string;
   previousPrice: number;
   currentPrice: number;
   variationPercentage: number;
@@ -54,6 +58,9 @@ export type ExtractedLine = {
   approvedQuantity?: number | null;
   approvedUnit?: string | null;
   matches: ProductMatch[];
+  suggestedCurrency?: string | null;
+  approvedCurrency?: string | null;
+  excluded: boolean;
 };
 
 export type DocumentSummary = {
@@ -70,6 +77,8 @@ export type DocumentSummary = {
 
 export type DocumentDetail = DocumentSummary & {
   lines: ExtractedLine[];
+  sourceKind: string;
+  observedAt: string;
 };
 
 export type CurrentComparison = {
@@ -82,6 +91,8 @@ export type CurrentComparison = {
   highestPrice: number;
   spreadPercentage: number;
   calculatedAt: string;
+  currency: string;
+  supplierCount: number;
 };
 
 export type ComparisonHistoryItem = {
@@ -90,5 +101,6 @@ export type ComparisonHistoryItem = {
   unit: string;
   price: number;
   effectiveAt: string;
+  currency: string;
   variationPercentage?: number | null;
 };

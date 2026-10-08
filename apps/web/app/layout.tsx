@@ -5,7 +5,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Sistema de Precios Comparativos",
-  description: "Monorepo enterprise con Next.js, .NET, Rust y PostgreSQL."
+  description: "Compara precios de fotos y cotizaciones con revisión del documento original."
 };
 
 export default function RootLayout({

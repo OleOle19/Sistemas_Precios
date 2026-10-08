@@ -1,3 +1,4 @@
+import { SupplierForm } from "../../components/supplier-form";
 import { getSuppliers } from "../../lib/api";
 
 export const dynamic = "force-dynamic";
@@ -13,11 +14,14 @@ export default async function SuppliersPage() {
           <h2>Proveedores</h2>
         </div>
       </section>
+      <SupplierForm />
       <div className="grid cards-grid">
         {suppliers.map((supplier) => (
           <article key={supplier.id} className="card">
             <strong>{supplier.name}</strong>
-            <p className="muted">{supplier.contactEmail ?? "Sin correo registrado"}</p>
+            <p className="muted">
+              {supplier.contactEmail ?? "Sin correo registrado"}
+            </p>
             <p>{supplier.documentCount} documentos asociados</p>
           </article>
         ))}

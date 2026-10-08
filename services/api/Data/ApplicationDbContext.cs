@@ -18,6 +18,7 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<Document>().Property(d => d.Revision).IsConcurrencyToken();
         modelBuilder.Entity<User>()
             .HasIndex(user => user.Email)
             .IsUnique();
@@ -62,5 +63,16 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
         modelBuilder.Entity<ComparisonResult>()
             .HasIndex(result => result.CanonicalProductId)
             .IsUnique();
+        foreach (var entity in modelBuilder.Model.GetEntityTypes())
+        {
+            foreach (var property in entity.GetProperties())
+            {
+                if (property.ClrType == typeof(string) && property.GetMaxLength() == null)
+                    property.SetMaxLength(property.Name is "RawText" or "FailureReason" or "FilePath" ? 4000 : 300);
+                if (property.ClrType == typeof(decimal) || property.ClrType == typeof(decimal?))
+                { property.SetPrecision(20); property.SetScale(6); }
+            }
+            foreach (var foreignKey in entity.GetForeignKeys()) foreignKey.DeleteBehavior = DeleteBehavior.NoAction;
+        }
     }
 }

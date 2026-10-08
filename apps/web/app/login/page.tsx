@@ -1,58 +1,49 @@
 "use client";
-
 import { useState } from "react";
-
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
-
+import { useRouter } from "next/navigation";
+import { submit } from "../../lib/submit";
 export default function LoginPage() {
-  const [message, setMessage] = useState("Usa las credenciales seed del backend.");
-
-  async function handleSubmit(formData: FormData) {
-    const email = String(formData.get("email") ?? "");
-    const password = String(formData.get("password") ?? "");
-
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  const router = useRouter();
+  async function login(data: FormData) {
+    setBusy(true);
     try {
-      const response = await fetch(`${apiBaseUrl}/auth/login`, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ email, password })
+      await submit("/auth/login", {
+        email: String(data.get("email")),
+        password: String(data.get("password")),
       });
-
-      if (!response.ok) {
-        setMessage("No se pudo iniciar sesion. Revisa credenciales o el estado de la API.");
-        return;
-      }
-
-      setMessage("Sesion iniciada. Ya puedes usar los endpoints protegidos.");
+      router.push("/");
+      router.refresh();
     } catch {
-      setMessage("No se pudo conectar con la API. Verifica que el backend este corriendo en localhost:8080.");
+      setMessage(
+        "No se pudo iniciar sesión. Revisa tu correo, contraseña y que el servicio esté disponible.",
+      );
+    } finally {
+      setBusy(false);
     }
   }
-
   return (
     <div className="centered-page">
-      <form action={handleSubmit} className="card auth-card">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">Acceso interno</p>
-            <h2>Iniciar sesion</h2>
-          </div>
-        </div>
+      <form action={login} className="card auth-card">
+        <h2>Iniciar sesión</h2>
         <label className="field">
-          <span>Email</span>
-          <input name="email" type="email" defaultValue="admin@precios.local" />
+          <span>Correo</span>
+          <input name="email" type="email" required autoComplete="username" />
         </label>
         <label className="field">
-          <span>Password</span>
-          <input name="password" type="password" defaultValue="Admin123!" />
+          <span>Contraseña</span>
+          <input
+            name="password"
+            type="password"
+            required
+            autoComplete="current-password"
+          />
         </label>
-        <button type="submit" className="primary-button">
-          Entrar
+        <button className="primary-button" disabled={busy}>
+          {busy ? "Ingresando…" : "Entrar"}
         </button>
-        <p className="muted">{message}</p>
+        <p role="alert">{message}</p>
       </form>
     </div>
   );

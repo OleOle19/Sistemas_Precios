@@ -41,7 +41,7 @@ public sealed record ExtractedLineResponse(
     decimal? ApprovedQuantity,
     string? ApprovedUnit,
     decimal? ApprovedPrice,
-    IReadOnlyList<ProductMatchResponse> Matches);
+    IReadOnlyList<ProductMatchResponse> Matches, string? SuggestedCurrency, string? ApprovedCurrency, bool Excluded);
 
 public sealed record DocumentDetailResponse(
     Guid Id,
@@ -53,14 +53,14 @@ public sealed record DocumentDetailResponse(
     DateTime UploadedAt,
     int ExtractedLineCount,
     string? FailureReason,
-    IReadOnlyList<ExtractedLineResponse> Lines);
+    IReadOnlyList<ExtractedLineResponse> Lines, string SourceKind, DateTime ObservedAt);
 
 public sealed record ReviewLineRequest(
     Guid ExtractedLineId,
     string CanonicalName,
     string Unit,
     decimal Quantity,
-    decimal Price);
+    decimal Price, string Currency = "PEN", bool Excluded = false);
 
 public sealed record DocumentReviewRequest(IReadOnlyList<ReviewLineRequest> Lines);
 
@@ -73,7 +73,7 @@ public sealed record CurrentComparisonItemDto(
     decimal AveragePrice,
     decimal HighestPrice,
     decimal SpreadPercentage,
-    DateTime CalculatedAt);
+    DateTime CalculatedAt, string Currency, int SupplierCount);
 
 public sealed record ComparisonHistoryItemDto(
     string ProductName,
@@ -81,21 +81,21 @@ public sealed record ComparisonHistoryItemDto(
     string Unit,
     decimal Price,
     DateTime EffectiveAt,
-    decimal? VariationPercentage);
+    decimal? VariationPercentage, string Currency, decimal? PreviousPrice);
 
 public sealed record TopPriceOpportunityDto(
     string ProductName,
     string SupplierName,
     decimal BestPrice,
     decimal AveragePrice,
-    decimal SpreadPercentage);
+    decimal SpreadPercentage, string Currency, string Unit);
 
 public sealed record PriceMoverDto(
     string ProductName,
     string SupplierName,
     decimal PreviousPrice,
     decimal CurrentPrice,
-    decimal VariationPercentage);
+    decimal VariationPercentage, string Currency, string Unit);
 
 public sealed record DashboardSummaryDto(
     int DocumentsProcessed,
