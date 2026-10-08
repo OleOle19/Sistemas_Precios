@@ -46,3 +46,8 @@ Cada prueba crea una base temporal `PreciosTests_<GUID>` y elimina exclusivament
 ## Alcance actual
 Versión funcional para ejecución local o una instalación con una única instancia de API. No incluye despliegue público, gestión de múltiples organizaciones, conversión de monedas, integración con sistemas de compras ni verificación automática de impuestos. Una cuenta administradora se crea al iniciar una base nueva; el formulario de configuración no cambia contraseñas de cuentas existentes.
 El esquema v2 se crea en una base nueva mediante `EnsureCreated`; no se migra automáticamente una base del prototipo. SQLite usa `storage/precios-v2.db` para conservar el archivo anterior. Antes de futuras actualizaciones de esquema o uso con datos empresariales, se necesita una estrategia de migraciones versionadas y copias de seguridad. [Arquitectura y decisiones](docs/architecture.md).
+
+## Materiales de demostración
+[Datos ficticios y resultados esperados](docs/datos-prueba/README.md): dos cotizaciones PDF y una etiqueta para probar unidades e historial. Los archivos son ejemplos; no se insertan automáticamente en la base. Leerlos requiere una clave de API con cuota disponible.
+
+[Presentación breve de proyectos en PDF](docs/presentacion-proyectos.pdf).
