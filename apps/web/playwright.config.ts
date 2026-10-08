@@ -21,6 +21,9 @@ export default defineConfig({
         LocalSecrets__Enabled: "false",
         OPENAI_API_KEY: "",
         OpenAI__ApiKey: "",
+        GEMINI_API_KEY: "",
+        Gemini__ApiKey: "",
+        Extraction__Provider: "Gemini",
       },
     },
     {

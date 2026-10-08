@@ -85,7 +85,11 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 
 builder.Services.AddScoped<IDocumentJobScheduler, DocumentJobScheduler>();
 builder.Services.AddHostedService<DocumentWorker>();
-builder.Services.AddHttpClient<IPriceExtractor, OpenAiPriceExtractor>(http => http.Timeout = TimeSpan.FromSeconds(120));
+var extractionProvider = PriceExtractionSettings.Provider(builder.Configuration);
+if (extractionProvider == "Gemini")
+    builder.Services.AddHttpClient<IPriceExtractor, GeminiPriceExtractor>(http => http.Timeout = TimeSpan.FromSeconds(120));
+else
+    builder.Services.AddHttpClient<IPriceExtractor, OpenAiPriceExtractor>(http => http.Timeout = TimeSpan.FromSeconds(120));
 builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(o => o.MultipartBodyLengthLimit = 11 * 1024 * 1024);
 builder.Services.AddScoped<IPasswordService, PasswordService>();
 builder.Services.AddScoped<IProductMatchingService, ProductMatchingService>();

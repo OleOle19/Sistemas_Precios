@@ -31,11 +31,16 @@ public static class ApiRoutes
             var d = await db.Documents.AsNoTracking().SingleOrDefaultAsync(d => d.Id == id, ct);
             return d is null || !File.Exists(d.FilePath) ? Results.NotFound() : Results.File(d.FilePath, d.ContentType, enableRangeProcessing: true);
         }).RequireAuthorization();
-        app.MapGet("/settings/extraction", (IConfiguration config) => Results.Ok(new
+        app.MapGet("/settings/extraction", (IConfiguration config) =>
         {
-            configured = !string.IsNullOrWhiteSpace(config["OpenAI:ApiKey"] ?? Environment.GetEnvironmentVariable("OPENAI_API_KEY")),
-            model = config["OpenAI:Model"] ?? "gpt-5.4-mini"
-        })).RequireAuthorization();
+            var provider = PriceExtractionSettings.Provider(config);
+            return Results.Ok(new
+            {
+                provider,
+                configured = !string.IsNullOrWhiteSpace(PriceExtractionSettings.Key(config, provider)),
+                model = PriceExtractionSettings.Model(config, provider)
+            });
+        }).RequireAuthorization();
         app.MapPost("/documents", UploadDocumentAsync).RequireAuthorization();
         app.MapPost("/documents/{id:guid}/reprocess", ReprocessDocumentAsync).RequireAuthorization();
         app.MapPost("/documents/{id:guid}/review", ReviewDocumentAsync).RequireAuthorization();

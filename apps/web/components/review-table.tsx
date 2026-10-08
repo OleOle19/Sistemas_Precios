@@ -105,7 +105,7 @@ export function ReviewTable({ document }: { document: DocumentDetail }) {
       )}
       {document.status === "Failed" && (
         <button disabled={busy} className="primary-button" onClick={retry}>
-          Volver a leer (consume saldo de API)
+          Volver a leer (usa cuota de API)
         </button>
       )}
       {rows.length > 0 && (

@@ -45,7 +45,7 @@ test("real session, supplier registration, no fabricated prices, missing key and
   await page.goto(`/documents/${doc.id}`);
   await expect(
     page.getByText(
-      "Configura la clave de OpenAI y vuelve a procesar el archivo.",
+      "Configura la clave de Gemini y vuelve a procesar el archivo.",
       { exact: true },
     ),
   ).toBeVisible({ timeout: 20000 });

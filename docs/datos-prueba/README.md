@@ -15,7 +15,7 @@ Todos los nombres y precios son inventados. Los correos example.com son ejemplos
 2. 02-Cotizacion-Centro.pdf: proveedor Centro, tipo Cotización, fecha 07/10/2026.
 3. 03-Etiqueta-Centro.png: proveedor Centro, tipo Etiqueta, fecha 08/10/2026. Se incluye también su versión PDF.
 
-Cada carga o relectura utiliza la API. Si continúa el error 429, puedes probar sesión y registro de proveedores; la lectura, revisión y comparación requerirán resolver cuota o límites. No hay un modo de OCR simulado ni una pantalla de alta manual de precios.
+Cada carga o relectura utiliza la API. Gemini y OpenAI utilizan la cuota o saldo de su proyecto. Si recibes 429, puedes probar sesión y registro de proveedores; la lectura, revisión y comparación requerirán esperar o resolver el límite. Un error 503 requiere reintentar más tarde. No hay un modo de OCR simulado ni una pantalla de alta manual de precios.
 
 ## 3. Revisar y aprobar
 

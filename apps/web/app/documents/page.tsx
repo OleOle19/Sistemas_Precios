@@ -21,6 +21,7 @@ export default async function DocumentsPage() {
       <DocumentUploadForm
         suppliers={suppliers}
         configured={settings.configured}
+        provider={settings.provider}
       />
 
       <section className="card">

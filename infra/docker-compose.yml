@@ -22,7 +22,9 @@ services:
     environment:
       Database__Provider: Postgres
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=sistemas_precios_v2;Username=precios;Password=${POSTGRES_PASSWORD:?Configura POSTGRES_PASSWORD}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:?Configura OPENAI_API_KEY}
+      Extraction__Provider: ${EXTRACTION_PROVIDER:-Gemini}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       Bootstrap__Email: ${BOOTSTRAP_EMAIL:-admin@precios.local}
       Bootstrap__Password: ${BOOTSTRAP_PASSWORD:?Configura BOOTSTRAP_PASSWORD}
       Storage__RootPath: /app/storage

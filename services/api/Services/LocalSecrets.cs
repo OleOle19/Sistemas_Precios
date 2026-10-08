@@ -13,7 +13,7 @@ public static class LocalSecrets
         if (!File.Exists(path)) return;
         using var json = JsonDocument.Parse(File.ReadAllText(path));
         var root = json.RootElement;
-        foreach (var (field, setting) in new[] { ("ApiKey", "OpenAI:ApiKey"), ("Password", "Bootstrap:Password") })
+        foreach (var (field, setting) in new[] { ("ApiKey", "OpenAI:ApiKey"), ("GeminiApiKey", "Gemini:ApiKey"), ("Password", "Bootstrap:Password") })
         {
             if (!root.TryGetProperty(field, out var encrypted) || string.IsNullOrWhiteSpace(encrypted.GetString())) continue;
             if (!string.IsNullOrWhiteSpace(config[setting])) continue;
@@ -24,5 +24,6 @@ public static class LocalSecrets
             catch (CryptographicException) { throw new InvalidOperationException("La configuración cifrada pertenece a otra cuenta de Windows. Ejecuta nuevamente Configurar-Local.ps1."); }
         }
         if (root.TryGetProperty("Email", out var email) && !string.IsNullOrWhiteSpace(email.GetString())) config["Bootstrap:Email"] = email.GetString();
+        if (root.TryGetProperty("ExtractionProvider", out var provider) && string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("Extraction__Provider"))) config["Extraction:Provider"] = provider.GetString();
     }
 }

@@ -37,4 +37,4 @@ export const getCurrentComparisons = () =>
 export const getComparisonHistory = () =>
   requestJson<ComparisonHistoryItem[]>("/comparisons/history");
 export const getExtractionSettings = () =>
-  requestJson<{ configured: boolean; model: string }>("/settings/extraction");
+  requestJson<{ configured: boolean; model: string; provider: string }>("/settings/extraction");

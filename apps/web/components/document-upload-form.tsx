@@ -6,9 +6,11 @@ import { submit } from "../lib/submit";
 export function DocumentUploadForm({
   suppliers,
   configured,
+  provider,
 }: {
   suppliers: Supplier[];
   configured: boolean;
+  provider: string;
 }) {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -39,8 +41,7 @@ export function DocumentUploadForm({
       <h2>Subir foto o cotización</h2>
       {!configured && (
         <p role="status">
-          La lectura de fotos requiere configurar la clave de OpenAI en el
-          servidor.
+          La lectura de fotos requiere configurar la clave de {provider} en el servidor.
         </p>
       )}
       {!suppliers.length && (
@@ -83,9 +84,9 @@ export function DocumentUploadForm({
         />
       </label>
       <p className="muted">
-        Se enviará este archivo a OpenAI para leer sus precios. Cada lectura
-        consume saldo de tu API. Usa fotos enfocadas y evita incluir datos
-        personales innecesarios.
+        Se enviará este archivo a {provider} para leer sus precios. {provider === "Gemini"
+          ? "Cada lectura utiliza la cuota del proyecto. En el nivel gratuito Google puede usar el contenido para mejorar sus productos; prueba con documentos ficticios."
+          : "Cada lectura consume saldo de tu API."} Usa fotos enfocadas.
       </p>
       <button
         className="primary-button"
